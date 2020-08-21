@@ -1,0 +1,22 @@
+[package]
+name = "nbpm"
+version = "0.1.0"
+authors = ["mikelma <mikelma7@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.115"
+serde_derive = "1.0.115"
+toml = "0.5"
+curl = "0.4.31"
+walkdir = "2.3.1"
+log = "0.4.11"
+simplelog = "0.8.0"
+sha2 = "0.9.1"
+lazy_static = "1.4.0"
+
+[[bin]]
+name = "nb-update"
+path = "src/bin/nb_update.rs"
