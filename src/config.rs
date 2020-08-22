@@ -3,7 +3,7 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 use crate::errors::NebulaError;
-use crate::{debian::DebConfig, nebula::NebulaConfig};
+use crate::repos::{DebConfig, NebulaConfig};
 
 #[derive(Deserialize, Debug)]
 pub enum Arch {

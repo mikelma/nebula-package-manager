@@ -12,11 +12,9 @@ fn main() {
     // let config = Configuration::from(Path::new("config.toml")).unwrap();
     let repos = create_repos().unwrap();
     nbpm::initialize(&repos).unwrap();
-    /*
     for repo in repos {
         repo.update().unwrap();
     }
-    */
     println!("[*] repositories updated");
 
     // debian::extract_deb("neofetch_7.1.0-1_all.deb");

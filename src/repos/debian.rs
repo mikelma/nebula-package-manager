@@ -1,9 +1,7 @@
 use serde_derive::Deserialize;
-use std::env;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use crate::errors::NebulaError;
 use crate::Repository;

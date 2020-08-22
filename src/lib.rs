@@ -12,17 +12,17 @@ use std::io::{Read, Write};
 use std::os::unix;
 use std::path::{Path, PathBuf};
 use std::process;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use walkdir::WalkDir;
 
 pub mod config;
-pub mod debian;
 pub mod errors;
-pub mod nebula;
+// pub mod nebula;
+pub mod repos;
 
 use config::Configuration;
-use debian::Debian;
 use errors::NebulaError;
+use repos::Debian;
 
 lazy_static! {
     pub static ref CONFIG: Configuration = Configuration::from(Path::new("config.toml")).unwrap();
@@ -188,7 +188,7 @@ pub fn file2hash(filepath: &Path) -> Result<String, ()> {
 pub fn run_cmd(cmd: &str, args: &[&str]) -> Result<(), NebulaError> {
     // create the command and add arguments if necessary
     let mut command = Command::new(cmd);
-    if args.len() > 0 {
+    if !args.is_empty() {
         command.args(args);
     }
     // execute command as child process
