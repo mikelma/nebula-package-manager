@@ -5,7 +5,7 @@ extern crate simplelog;
 use std::path::Path;
 
 // use nbpm::debian;
-use nbpm::{create_repos, Repository, CONFIG};
+use nbpm::{repos::create_repos, Repository, CONFIG};
 
 fn main() {
     // set up environment

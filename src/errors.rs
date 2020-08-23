@@ -8,4 +8,5 @@ pub enum NebulaError {
     CmdError(String),
     /// File system related error
     Fs(String),
+    DependencyParseError,
 }

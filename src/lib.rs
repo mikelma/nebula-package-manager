@@ -17,31 +17,18 @@ use walkdir::WalkDir;
 
 pub mod config;
 pub mod errors;
-// pub mod nebula;
+pub mod pkg;
 pub mod repos;
 
+pub use errors::NebulaError;
+pub use pkg::Package;
+pub use repos::{RepoType, Repository};
+
+// pub mod nebula;
 use config::Configuration;
-use errors::NebulaError;
-use repos::Debian;
 
 lazy_static! {
     pub static ref CONFIG: Configuration = Configuration::from(Path::new("config.toml")).unwrap();
-}
-
-pub trait Repository {
-    fn initialize(&self) -> Result<(), NebulaError>;
-    fn update(&self) -> Result<(), NebulaError>;
-}
-
-pub fn create_repos() -> Result<Vec<impl Repository>, NebulaError> {
-    let mut repos = vec![];
-    // TODO: Nebula repository init
-    // debian repo
-    if CONFIG.repos.debian.is_some() {
-        repos.push(Debian::new()?);
-    }
-
-    Ok(repos)
 }
 
 /// Checks if all nebula directories are present, if not, creates the needed directories. It also

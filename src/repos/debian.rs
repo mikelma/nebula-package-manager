@@ -3,10 +3,7 @@ use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 
-use crate::errors::NebulaError;
-use crate::Repository;
-use crate::CONFIG;
-use crate::{download, file2hash};
+use crate::{download, file2hash, NebulaError, RepoType, Repository, CONFIG};
 
 // ------------------------------------------------------------------ //
 //                          Configuration
@@ -45,6 +42,10 @@ pub struct DebConfig {
 pub struct Debian {}
 
 impl Repository for Debian {
+    fn get_type(&self) -> RepoType {
+        RepoType::Debian
+    }
+
     fn initialize(&self) -> Result<(), NebulaError> {
         let homedir = match CONFIG.repos.debian {
             Some(_) => CONFIG.nebulahome.clone(),
