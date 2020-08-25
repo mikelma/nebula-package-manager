@@ -22,7 +22,7 @@ pub mod repos;
 
 pub use errors::NebulaError;
 pub use pkg::Package;
-pub use repos::{RepoType, Repository};
+pub use repos::{create_repos, RepoType, Repository};
 
 // pub mod nebula;
 use config::Configuration;
