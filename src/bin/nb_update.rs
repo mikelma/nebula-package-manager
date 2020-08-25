@@ -2,15 +2,14 @@
 // extern crate log;
 extern crate simplelog;
 
-use std::path::Path;
-
+// use std::path::Path;
 // use nbpm::debian;
-use nbpm::{repos::create_repos, Repository, CONFIG};
+use nbpm::Repository;
 
 fn main() {
     // set up environment
     // let config = Configuration::from(Path::new("config.toml")).unwrap();
-    let repos = create_repos().unwrap();
+    let repos = nbpm::create_repos().unwrap();
     nbpm::initialize(&repos).unwrap();
     for repo in repos {
         repo.update().unwrap();
