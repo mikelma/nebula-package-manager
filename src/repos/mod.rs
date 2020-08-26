@@ -11,7 +11,11 @@ use crate::{NebulaError, Package, CONFIG};
 pub trait Repository {
     fn initialize(&self) -> Result<(), NebulaError>;
     fn update(&self) -> Result<(), NebulaError>;
-    fn search(&self, name: &str, version: Option<&str>) -> Result<Option<Package>, NebulaError>;
+    fn search(
+        &self,
+        name: &str,
+        version: Option<&str>,
+    ) -> Result<Option<Vec<Package>>, NebulaError>;
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
