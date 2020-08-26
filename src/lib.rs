@@ -21,7 +21,7 @@ pub mod pkg;
 pub mod repos;
 
 pub use errors::NebulaError;
-pub use pkg::Package;
+pub use pkg::{Dependency, Package};
 pub use repos::{create_repos, RepoType, Repository};
 
 // pub mod nebula;
