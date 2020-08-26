@@ -30,12 +30,8 @@ impl Package {
         self.source = Some(PkgSource(repo_type, url.to_string()));
     }
 
-    pub fn add_dependency(&mut self, deps: Vec<Dependency>) {
-        if let Some(vec) = &mut self.depends {
-            vec.push(deps);
-        } else {
-            self.depends = Some(vec![deps]);
-        }
+    pub fn set_dependencies(&mut self, deps: Option<Vec<Vec<Dependency>>>) {
+        self.depends = deps;
     }
 }
 
