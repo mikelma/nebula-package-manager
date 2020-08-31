@@ -22,19 +22,6 @@ impl Package {
             depends: None,
         }
     }
-    /*
-    pub fn set_version(&mut self, ver: &str) {
-        self.version = ver.to_string();
-    }
-
-    pub fn set_source(&mut self, repo_type: RepoType, url: &str) {
-        self.source = Some(PkgSource(repo_type, url.to_string()));
-    }
-
-    pub fn set_dependencies(&mut self, deps: Option<Vec<Vec<Dependency>>>) {
-        self.depends = deps;
-    }
-    */
 }
 
 impl fmt::Display for Package {

@@ -142,7 +142,6 @@ impl<'d> Repository for Debian<'d> {
         let re_src = Regex::new(r"^Filename: (.+)").unwrap();
         let re_depends = Regex::new(r"^Depends: (.+)").unwrap();
 
-        // let mut matches = vec![];
         let mut pkgs_list = vec![];
         for component in &self.conf.components {
             let mut buff = BufReader::new(
@@ -154,36 +153,28 @@ impl<'d> Repository for Debian<'d> {
                 .expect("Package file for component not found"),
             );
 
-            //let mut match_info = String::new();
             let mut line = String::new();
             while read_line(&mut buff, &mut line)? > 0 {
                 // if a line matches the package name
                 if re.is_match(&line) {
-                    // match_info.push_str(&line);
                     let mut continue_read = true;
-
                     // get package name and create the package object
-                    let cap = re.captures_iter(&line).nth(0).expect("Cannot capture name");
+                    let cap = re.captures_iter(&line).next().expect("Cannot capture name");
                     let pkg_name = cap.get(1).expect("Cannot gather name").as_str();
                     let mut package = Package::new(pkg_name, "");
-
                     while read_line(&mut buff, &mut line)? > 0 && continue_read {
                         // end of info is reached
                         if line.trim_end().is_empty() {
                             continue_read = false;
-                            //let m = match_info.clone().trim_end().to_string();
-                            // matches.push(m);
-                            // match_info.clear();
                             continue;
 
                         // parse package's info
                         } else {
-                            // match_info.push_str(&line);
                             // get package version
                             if re_version.is_match(&line) {
                                 let cap = re_version
                                     .captures_iter(&line)
-                                    .nth(0)
+                                    .next()
                                     .expect("Cannot capture version");
                                 let pkg_version =
                                     cap.get(1).expect("Cannot gather version").as_str();
@@ -193,7 +184,7 @@ impl<'d> Repository for Debian<'d> {
                             if re_src.is_match(&line) {
                                 let cap = re_src
                                     .captures_iter(&line)
-                                    .nth(0)
+                                    .next()
                                     .expect("Cannot capture source (Filename)");
                                 let pkg_url = format!(
                                     "{}/{}",
@@ -209,7 +200,7 @@ impl<'d> Repository for Debian<'d> {
                             if re_depends.is_match(&line) {
                                 let cap = re_depends
                                     .captures_iter(&line)
-                                    .nth(0)
+                                    .next()
                                     .expect("Cannot capture dependencies");
                                 let deps_str = cap
                                     .get(1)
