@@ -3,9 +3,10 @@ use serde_derive::Deserialize;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::str::Chars;
 
-use crate::{download, file2hash, Dependency, NebulaError, Package, RepoType, Repository, CONFIG};
+use crate::{
+    download, file2hash, pkg, Dependency, NebulaError, Package, RepoType, Repository, CONFIG,
+};
 
 // ------------------------------------------------------------------ //
 //                          Configuration
@@ -136,12 +137,12 @@ impl<'d> Repository for Debian<'d> {
         }
 
         // regex
-        let re = Regex::new(format!(r"^Package: ({})", name).as_str()).unwrap();
+        let re = Regex::new(format!(r"^Package: ({}.*)", name).as_str()).unwrap();
         let re_version = Regex::new(r"^Version: (.+)").unwrap();
         let re_src = Regex::new(r"^Filename: (.+)").unwrap();
         let re_depends = Regex::new(r"^Depends: (.+)").unwrap();
 
-        let mut matches = vec![];
+        // let mut matches = vec![];
         let mut pkgs_list = vec![];
         for component in &self.conf.components {
             let mut buff = BufReader::new(
@@ -153,32 +154,31 @@ impl<'d> Repository for Debian<'d> {
                 .expect("Package file for component not found"),
             );
 
-            let mut match_info = String::new();
+            //let mut match_info = String::new();
             let mut line = String::new();
             while read_line(&mut buff, &mut line)? > 0 {
                 // if a line matches the package name
                 if re.is_match(&line) {
-                    match_info.push_str(&line);
+                    // match_info.push_str(&line);
                     let mut continue_read = true;
 
                     // get package name and create the package object
                     let cap = re.captures_iter(&line).nth(0).expect("Cannot capture name");
                     let pkg_name = cap.get(1).expect("Cannot gather name").as_str();
-                    let mut package = Package::new(pkg_name);
+                    let mut package = Package::new(pkg_name, "");
 
                     while read_line(&mut buff, &mut line)? > 0 && continue_read {
                         // end of info is reached
                         if line.trim_end().is_empty() {
                             continue_read = false;
-                            let m = match_info.clone().trim_end().to_string();
-                            matches.push(m);
-                            match_info.clear();
+                            //let m = match_info.clone().trim_end().to_string();
+                            // matches.push(m);
+                            // match_info.clear();
                             continue;
 
                         // parse package's info
                         } else {
-                            match_info.push_str(&line);
-
+                            // match_info.push_str(&line);
                             // get package version
                             if re_version.is_match(&line) {
                                 let cap = re_version
@@ -187,7 +187,7 @@ impl<'d> Repository for Debian<'d> {
                                     .expect("Cannot capture version");
                                 let pkg_version =
                                     cap.get(1).expect("Cannot gather version").as_str();
-                                package.set_version(pkg_version);
+                                package.version = pkg_version.to_string();
                             }
                             // get package source
                             if re_src.is_match(&line) {
@@ -202,7 +202,8 @@ impl<'d> Repository for Debian<'d> {
                                         .expect("Cannot gather source (Filename)")
                                         .as_str()
                                 );
-                                package.set_source(RepoType::Debian, &pkg_url);
+                                package.source =
+                                    Some(pkg::PkgSource::from(RepoType::Debian, &pkg_url));
                             }
                             // get dependencies
                             if re_depends.is_match(&line) {
@@ -215,7 +216,7 @@ impl<'d> Repository for Debian<'d> {
                                     .expect("Cannot gather dependencies list")
                                     .as_str();
                                 let pkg_deps = Self::parse_dependecies_str(&deps_str)?;
-                                package.set_dependencies(Some(pkg_deps));
+                                package.depends = Some(pkg_deps);
                             }
                         }
                     }
