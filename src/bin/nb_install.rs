@@ -9,7 +9,7 @@ fn main() {
     for repo in repos {
         let match_ = repo.search("libc", None).unwrap();
         for m in match_.unwrap() {
-            println!("{:#?}", m);
+            println!("{}\n", m);
         }
         // matches.append(&mut match_.unwrap());
     }
