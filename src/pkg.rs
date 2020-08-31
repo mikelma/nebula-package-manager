@@ -1,29 +1,30 @@
 use serde_derive::{Deserialize, Serialize};
 // use version_compare::version::Version;
 use crate::RepoType;
+use std::fmt;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct Package {
-    name: String,
-    version: Option<String>,
+    pub name: String,
+    pub version: String,
     #[serde(rename = "source")]
-    source: Option<PkgSource>,
+    pub source: Option<PkgSource>,
     #[serde(rename = "dependencies")]
-    depends: Option<Vec<Vec<Dependency>>>,
+    pub depends: Option<Vec<Vec<Dependency>>>,
 }
 
 impl Package {
-    pub fn new(name: &str) -> Package {
+    pub fn new(name: &str, version: &str) -> Package {
         Package {
             name: name.to_string(),
-            version: None,
+            version: version.to_string(),
             source: None,
             depends: None,
         }
     }
-
+    /*
     pub fn set_version(&mut self, ver: &str) {
-        self.version = Some(ver.to_string());
+        self.version = ver.to_string();
     }
 
     pub fn set_source(&mut self, repo_type: RepoType, url: &str) {
@@ -32,6 +33,13 @@ impl Package {
 
     pub fn set_dependencies(&mut self, deps: Option<Vec<Vec<Dependency>>>) {
         self.depends = deps;
+    }
+    */
+}
+
+impl fmt::Display for Package {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Name: {}\nVersion: {}", self.name, self.version)
     }
 }
 
@@ -67,7 +75,7 @@ mod tests {
     fn package_seralization_deserialization() {
         let package = Package {
             name: "proba".to_string(),
-            version: Some("1.2.3".to_string()),
+            version: "1.2.3".to_string(),
             source: Some(PkgSource(
                 RepoType::Nebula,
                 "source.url.eus/proba".to_string(),
