@@ -64,7 +64,6 @@ impl<'d> Repository for Debian<'d> {
     }
 
     fn update(&self) -> Result<(), NebulaError> {
-        println!("[*] updating debian repositories");
         // remove old files from debian/repo
         for entry in self.repo_dir.read_dir().expect("read_dir call failed") {
             if let Ok(entry) = entry {
