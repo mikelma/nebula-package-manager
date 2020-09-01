@@ -5,7 +5,8 @@ use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    download, file2hash, pkg, Dependency, NebulaError, Package, RepoType, Repository, CONFIG,
+    download, file2hash, pkg, Dependency, DependsList, NebulaError, Package, RepoType, Repository,
+    CONFIG,
 };
 
 // ------------------------------------------------------------------ //
@@ -207,7 +208,7 @@ impl<'d> Repository for Debian<'d> {
                                     .expect("Cannot gather dependencies list")
                                     .as_str();
                                 let pkg_deps = Self::parse_dependecies_str(&deps_str)?;
-                                package.depends = Some(pkg_deps);
+                                package.depends = pkg_deps;
                             }
                         }
                     }
@@ -330,9 +331,9 @@ impl<'d> Debian<'d> {
         Err(io::Error::new(io::ErrorKind::Other, "hash not found"))
     }
 
-    fn parse_dependecies_str(deps_str: &str) -> Result<Vec<Vec<Dependency>>, NebulaError> {
+    fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, NebulaError> {
         let deps_split: Vec<&str> = deps_str.split(", ").collect();
-        let mut dependencies_list = vec![];
+        let mut dependencies_list = DependsList::new();
         for dep_str in deps_split {
             let mut dependency_options = vec![];
             let splitted: Vec<&str> = dep_str.split(" | ").collect();
@@ -361,8 +362,16 @@ impl<'d> Debian<'d> {
                 }
             }
             // add dependency options to dependency list
-            dependencies_list.push(dependency_options);
+            if dependency_options.len() == 1 {
+                dependencies_list.push(dependency_options.pop().unwrap());
+            } else {
+                dependencies_list.push_opts(dependency_options);
+            }
         }
-        Ok(dependencies_list)
+        if !dependencies_list.is_empty() {
+            Ok(Some(dependencies_list))
+        } else {
+            Ok(None)
+        }
     }
 }

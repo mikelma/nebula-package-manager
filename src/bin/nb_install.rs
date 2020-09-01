@@ -7,7 +7,7 @@ fn main() {
     nbpm::initialize(&repos).unwrap();
     // let mut matches = vec![];
     for repo in repos {
-        let match_ = repo.search("libc", None).unwrap();
+        let match_ = repo.search("gcc", None).unwrap();
         for m in match_.unwrap() {
             println!("{}\n", m);
         }

@@ -1,5 +1,3 @@
-use serde_derive::{Deserialize, Serialize};
-
 pub mod debian;
 pub mod nebula;
 
@@ -18,11 +16,9 @@ pub trait Repository {
     ) -> Result<Option<Vec<Package>>, NebulaError>;
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum RepoType {
-    #[serde(rename = "debian")]
     Debian,
-    #[serde(rename = "nebula")]
     Nebula,
 }
 
