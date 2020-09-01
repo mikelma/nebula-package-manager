@@ -3,7 +3,6 @@ arch = "amd64"
 # where all nebula files are located
 nebula-dir= "/tmp/nebula"
 
-# 
 fakeroot-dir = "/tmp/nebula/pkgs"
 
 # where the packages are going to be linked to (usually, /usr)
