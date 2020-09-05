@@ -26,7 +26,7 @@ pub fn create_repos() -> Result<Vec<impl Repository>, NebulaError> {
     let mut repos = vec![];
     // TODO: Nebula repository init
     // debian repo
-    if CONFIG.repos.debian.is_some() {
+    if CONFIG.repos().debian().is_some() {
         repos.push(Debian::new()?);
     }
 

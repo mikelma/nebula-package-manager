@@ -35,8 +35,18 @@ impl Component {
 /// Struct containing all configuration related to debian packages
 #[derive(Deserialize, Clone, Debug)]
 pub struct DebConfig {
-    pub repository: String,
-    pub components: Vec<Component>,
+    repository: String,
+    components: Vec<Component>,
+}
+
+impl DebConfig {
+    pub fn repository(&self) -> &str {
+        self.repository.as_str()
+    }
+
+    pub fn components(&self) -> &Vec<Component> {
+        &self.components
+    }
 }
 
 // ------------------------------------------------------------------ //
@@ -88,7 +98,7 @@ impl<'d> Repository for Debian<'d> {
             let expected_hash = Self::package_file_hash(
                 &self.repo_dir.join("InRelease"),
                 &component.to_str(),
-                CONFIG.arch.to_str(),
+                CONFIG.arch().to_str(),
             )
             .unwrap();
 
@@ -101,7 +111,7 @@ impl<'d> Repository for Debian<'d> {
                     "{}/{}/binary-{}/Packages.xz",
                     self.conf.repository,
                     component.to_str(),
-                    CONFIG.arch.to_str()
+                    CONFIG.arch().to_str()
                 ),
                 &pkgs_filename,
             );
@@ -159,9 +169,15 @@ impl<'d> Repository for Debian<'d> {
                 if re.is_match(&line) {
                     let mut continue_read = true;
                     // get package name and create the package object
+                    // let pkg_line = line.clone();
                     let cap = re.captures_iter(&line).next().expect("Cannot capture name");
-                    let pkg_name = cap.get(1).expect("Cannot gather name").as_str();
-                    let mut package = Package::new(pkg_name, "");
+
+                    let pkg_name = cap.get(1).expect("Cannot gather name").as_str().to_string();
+                    let mut pkg_version = String::new();
+                    let mut pkg_src = None;
+                    let mut pkg_deps = None;
+                    // let mut package = Package::new(pkg_name, "");
+
                     while read_line(&mut buff, &mut line)? > 0 && continue_read {
                         // end of info is reached
                         if line.trim_end().is_empty() {
@@ -176,9 +192,11 @@ impl<'d> Repository for Debian<'d> {
                                     .captures_iter(&line)
                                     .next()
                                     .expect("Cannot capture version");
-                                let pkg_version =
-                                    cap.get(1).expect("Cannot gather version").as_str();
-                                package.version = pkg_version.to_string();
+                                pkg_version = cap
+                                    .get(1)
+                                    .expect("Cannot gather version")
+                                    .as_str()
+                                    .to_string();
                             }
                             // get package source
                             if re_src.is_match(&line) {
@@ -193,8 +211,7 @@ impl<'d> Repository for Debian<'d> {
                                         .expect("Cannot gather source (Filename)")
                                         .as_str()
                                 );
-                                package.source =
-                                    Some(pkg::PkgSource::from(RepoType::Debian, &pkg_url));
+                                pkg_src = Some(pkg::PkgSource::from(RepoType::Debian, &pkg_url));
                             }
                             // get dependencies
                             if re_depends.is_match(&line) {
@@ -206,12 +223,13 @@ impl<'d> Repository for Debian<'d> {
                                     .get(1)
                                     .expect("Cannot gather dependencies list")
                                     .as_str();
-                                let pkg_deps = Self::parse_dependecies_str(&deps_str)?;
-                                package.depends = pkg_deps;
+                                pkg_deps = Self::parse_dependecies_str(&deps_str)?;
+                                // package.depends = pkg_deps;
                             }
                         }
                     }
-                    pkgs_list.push(package);
+                    // pkgs_list.push(package);
+                    pkgs_list.push(Package::new(&pkg_name, &pkg_version, pkg_src, pkg_deps));
                 }
             }
         }
@@ -225,12 +243,12 @@ impl<'d> Repository for Debian<'d> {
 
 impl<'d> Debian<'d> {
     pub fn new() -> Result<Debian<'d>, NebulaError> {
-        let conf = match &CONFIG.repos.debian {
+        let conf = match &CONFIG.repos().debian() {
             Some(c) => c,
             None => return Err(NebulaError::RepoConfigNotFound),
         };
 
-        let repo_dir = CONFIG.nebulahome.join("repo/debian");
+        let repo_dir = CONFIG.repos_dir().join("debian");
         Ok(Debian { conf, repo_dir })
     }
     pub fn extract_deb(deb_path: &Path) -> Result<(), NebulaError> {

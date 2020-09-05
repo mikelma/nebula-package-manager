@@ -4,20 +4,45 @@ use std::fmt;
 
 #[derive(Debug)]
 pub struct Package {
-    pub name: String,
-    pub version: String,
-    pub source: Option<PkgSource>,
-    pub depends: Option<DependsList>,
+    /// The name of the package (no version included)
+    name: String,
+    /// Version of the package
+    version: String,
+    /// Source of the package
+    source: Option<PkgSource>,
+    /// The dependency list of the package. If it has no depenedencies, this field is None.
+    depends: Option<DependsList>,
 }
 
 impl Package {
-    pub fn new(name: &str, version: &str) -> Package {
+    pub fn new(
+        name: &str,
+        version: &str,
+        source: Option<PkgSource>,
+        depends: Option<DependsList>,
+    ) -> Package {
         Package {
             name: name.to_string(),
             version: version.to_string(),
-            source: None,
-            depends: None,
+            source,
+            depends,
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    pub fn source(&self) -> &Option<PkgSource> {
+        &self.source
+    }
+
+    pub fn depends(&self) -> &Option<DependsList> {
+        &self.depends
     }
 }
 
@@ -37,6 +62,7 @@ impl fmt::Display for Package {
     }
 }
 
+/// Contains a package dependency. The name of the package and the version (if some) are required.
 #[derive(Debug)]
 pub struct Dependency(String, Option<String>);
 
@@ -60,10 +86,15 @@ impl fmt::Display for Dependency {
     }
 }
 
+/// `DependsItem` objects are used as items of `DependsList`. This is useful to express different
+/// dependency types, such as different package options for a dependency or an optional dependency.
 #[derive(Debug)]
 enum DependsItem {
+    /// A single dependency. The package completly depends on this package to be present.
     Single(Dependency),
+    /// Holds a vector of dependencies (different options), and only one should be installed.
     Opts(Vec<Dependency>),
+    // TODO: Optional(Dependency) // optional dependencies
 }
 
 impl fmt::Display for DependsItem {
@@ -83,6 +114,7 @@ impl fmt::Display for DependsItem {
     }
 }
 
+/// Defines all the dependencies a package might depend on.
 #[derive(Debug)]
 pub struct DependsList(Vec<DependsItem>);
 
@@ -121,6 +153,8 @@ impl fmt::Display for DependsList {
     }
 }
 
+/// Contains the information about the source of the package: which repo does the package come from
+/// and the url to download the package.
 #[derive(Debug, PartialEq)]
 pub struct PkgSource(RepoType, String);
 

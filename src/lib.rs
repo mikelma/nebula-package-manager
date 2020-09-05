@@ -20,37 +20,31 @@ pub mod errors;
 pub mod pkg;
 pub mod repos;
 
+pub use config::constants::*;
 pub use errors::NebulaError;
 pub use pkg::{Dependency, DependsList, Package};
 pub use repos::{create_repos, RepoType, Repository};
-
-// pub mod nebula;
-use config::Configuration;
-
-lazy_static! {
-    pub static ref CONFIG: Configuration = Configuration::from(Path::new("config.toml")).unwrap();
-}
 
 /// Checks if all nebula directories are present, if not, creates the needed directories. It also
 /// creates the needed files, such as the logger.
 pub fn initialize(repos: &[impl Repository]) -> Result<(), NebulaError> {
     // check nebula's home and cache directory (inside home directory)
-    if !CONFIG.nebulahome.is_dir() {
-        create_dir_all(&CONFIG.nebulahome).unwrap(); // create home
-        create_dir(&CONFIG.nebulahome.join("repo")).unwrap(); // create home/repo
+    if !CONFIG.nebulahome().is_dir() {
+        create_dir_all(&CONFIG.nebulahome()).unwrap(); // create home
+        create_dir(&CONFIG.repos_dir()).unwrap(); // create home/repo
     }
 
     // check fakeroot
-    if !CONFIG.fakerootdir.is_dir() {
-        create_dir_all(&CONFIG.fakerootdir).unwrap();
+    if !CONFIG.fakerootdir().is_dir() {
+        create_dir_all(&CONFIG.fakerootdir()).unwrap();
     }
 
     // check destdir, if it does not exists, fatal error: panic!
-    if !CONFIG.destdir.is_dir() {
+    if !CONFIG.destdir().is_dir() {
         eprintln!(
             "Fatal: The destination directory for packages does not exist, 
             please create or change the destination directory: {}",
-            CONFIG.destdir.display()
+            CONFIG.destdir().display()
         );
     }
 
@@ -60,7 +54,7 @@ pub fn initialize(repos: &[impl Repository]) -> Result<(), NebulaError> {
         WriteLogger::new(
             LevelFilter::Debug,
             Config::default(),
-            File::create("nebula.log").unwrap(),
+            File::create(&CONFIG.logfile()).unwrap(),
         ),
     ])
     .unwrap();
