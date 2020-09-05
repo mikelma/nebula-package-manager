@@ -318,16 +318,13 @@ impl<'d> Repository for Debian<'d> {
                 // if a line matches the package name
                 if re.is_match(&line) {
                     let mut continue_read = true;
-                    // get package name and create the package object
-                    // let pkg_line = line.clone();
-                    let cap = re.captures_iter(&line).next().expect("Cannot capture name");
 
+                    let cap = re.captures_iter(&line).next().expect("Cannot capture name");
                     let pkg_name = cap.get(1).expect("Cannot gather name").as_str().to_string();
-                    let mut pkg_version = String::new();
+                    // temporary values for Package
+                    let mut pkg_version = None;
                     let mut pkg_src = None;
                     let mut pkg_deps = None;
-                    // let mut package = Package::new(pkg_name, "");
-
                     while read_line(&mut buff, &mut line)? > 0 && continue_read {
                         // end of info is reached
                         if line.trim_end().is_empty() {
@@ -342,11 +339,12 @@ impl<'d> Repository for Debian<'d> {
                                     .captures_iter(&line)
                                     .next()
                                     .expect("Cannot capture version");
-                                pkg_version = cap
-                                    .get(1)
-                                    .expect("Cannot gather version")
-                                    .as_str()
-                                    .to_string();
+                                pkg_version = Some(
+                                    cap.get(1)
+                                        .expect("Cannot gather version")
+                                        .as_str()
+                                        .to_string(),
+                                );
                             }
                             // get package source
                             if re_src.is_match(&line) {
@@ -374,12 +372,18 @@ impl<'d> Repository for Debian<'d> {
                                     .expect("Cannot gather dependencies list")
                                     .as_str();
                                 pkg_deps = Self::parse_dependecies_str(&deps_str)?;
-                                // package.depends = pkg_deps;
                             }
                         }
                     }
-                    // pkgs_list.push(package);
-                    pkgs_list.push(Package::new(&pkg_name, &pkg_version, pkg_src, pkg_deps));
+                    if let Some(ver) = pkg_version {
+                        if let Some(src) = pkg_src {
+                            pkgs_list.push(Package::new(&pkg_name, &ver, src, pkg_deps)?);
+                        } else {
+                            return Err(NebulaError::SourceParsingError);
+                        }
+                    } else {
+                        return Err(NebulaError::VersionParsingError);
+                    }
                 }
             }
         }

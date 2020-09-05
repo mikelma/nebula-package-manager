@@ -9,7 +9,7 @@ pub struct Package {
     /// Version of the package
     version: String,
     /// Source of the package
-    source: Option<PkgSource>,
+    source: PkgSource,
     /// The dependency list of the package. If it has no depenedencies, this field is None.
     depends: Option<DependsList>,
 }
@@ -18,7 +18,7 @@ impl Package {
     pub fn new(
         name: &str,
         version: &str,
-        source: Option<PkgSource>,
+        source: PkgSource,
         depends: Option<DependsList>,
     ) -> Result<Package, NebulaError> {
         // check if the provided version has a compatible format with `version_compare`
@@ -42,7 +42,7 @@ impl Package {
         &self.version
     }
 
-    pub fn source(&self) -> &Option<PkgSource> {
+    pub fn source(&self) -> &PkgSource {
         &self.source
     }
 
@@ -77,7 +77,6 @@ impl PartialEq for Package {
             Some(v) => v,
             None => unreachable!(), // it is checked in the contructur of `Package`
         };
-
         self.name.eq(other.name()) && ver_pkg.compare(&ver_other) == CompOp::Eq
     }
 }
