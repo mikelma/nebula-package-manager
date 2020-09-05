@@ -1,3 +1,5 @@
+use std::fmt;
+
 pub mod debian;
 pub mod nebula;
 
@@ -8,6 +10,7 @@ use crate::{NebulaError, Package, CONFIG};
 
 pub trait Repository {
     fn initialize(&self) -> Result<(), NebulaError>;
+    fn repo_type(&self) -> RepoType;
     fn update(&self) -> Result<(), NebulaError>;
     fn search(
         &self,
@@ -16,10 +19,19 @@ pub trait Repository {
     ) -> Result<Option<Vec<Package>>, NebulaError>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RepoType {
     Debian,
     Nebula,
+}
+
+impl fmt::Display for RepoType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RepoType::Nebula => write!(f, "nebula"),
+            RepoType::Debian => write!(f, "debian"),
+        }
+    }
 }
 
 pub fn create_repos() -> Result<Vec<impl Repository>, NebulaError> {
