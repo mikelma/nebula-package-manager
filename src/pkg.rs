@@ -1,6 +1,6 @@
-// use version_compare::version::Version;
-use crate::RepoType;
+use crate::{NebulaError, RepoType};
 use std::fmt;
+use version_compare::{CompOp, Version};
 
 #[derive(Debug)]
 pub struct Package {
@@ -20,13 +20,18 @@ impl Package {
         version: &str,
         source: Option<PkgSource>,
         depends: Option<DependsList>,
-    ) -> Package {
-        Package {
+    ) -> Result<Package, NebulaError> {
+        // check if the provided version has a compatible format with `version_compare`
+        if Version::from(&version).is_none() {
+            return Err(NebulaError::NotSupportedVersion);
+        }
+
+        Ok(Package {
             name: name.to_string(),
             version: version.to_string(),
             source,
             depends,
-        }
+        })
     }
 
     pub fn name(&self) -> &str {
@@ -59,6 +64,21 @@ impl fmt::Display for Package {
             ),
             None => write!(f, "Name: {}, Version: {}", self.name, self.version),
         }
+    }
+}
+
+impl PartialEq for Package {
+    fn eq(&self, other: &Self) -> bool {
+        let ver_pkg = match Version::from(&self.version) {
+            Some(v) => v,
+            None => unreachable!(), // it is checked in the contructur of `Package`
+        };
+        let ver_other = match Version::from(&other.version()) {
+            Some(v) => v,
+            None => unreachable!(), // it is checked in the contructur of `Package`
+        };
+
+        self.name.eq(other.name()) && ver_pkg.compare(&ver_other) == CompOp::Eq
     }
 }
 

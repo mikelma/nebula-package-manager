@@ -9,4 +9,6 @@ pub enum NebulaError {
     /// File system related error
     Fs(String),
     DependencyParseError,
+    /// The package version format is unsupported
+    NotSupportedVersion,
 }
