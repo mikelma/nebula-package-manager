@@ -59,18 +59,168 @@ pub struct Debian<'d> {
     repo_dir: PathBuf,
 }
 
-impl<'d> Repository for Debian<'d> {
-    /*
-    fn get_type(&self) -> RepoType {
-        RepoType::Debian
-    }_
-    */
+impl<'d> Debian<'d> {
+    pub fn new() -> Result<Debian<'d>, NebulaError> {
+        let conf = match &CONFIG.repos().debian() {
+            Some(c) => c,
+            None => return Err(NebulaError::RepoConfigNotFound),
+        };
 
+        let repo_dir = CONFIG.repos_dir().join("debian");
+        Ok(Debian { conf, repo_dir })
+    }
+    pub fn extract_deb(deb_path: &Path) -> Result<(), NebulaError> {
+        // create a directory (with the same name of the deb to extract the deb into)
+        // if it exists delete the old directory first
+        let parent_dir = deb_path.parent().expect("Cannot extract root");
+        let out_dir = parent_dir.join(deb_path.file_stem().unwrap());
+        if out_dir.exists() {
+            if let Err(e) = fs::remove_dir_all(&out_dir) {
+                return Err(NebulaError::Fs(format!(
+                    "cannot clean {}: {}",
+                    out_dir.display(),
+                    e
+                )));
+            }
+        }
+        if let Err(e) = fs::create_dir(&out_dir) {
+            return Err(NebulaError::Fs(format!(
+                "cannot create {}: {}",
+                out_dir.display(),
+                e
+            )));
+        }
+        // extract main deb archive
+        crate::run_cmd(
+            "/usr/bin/ar",
+            &[
+                "x",
+                deb_path.to_str().unwrap(),
+                "--output",
+                out_dir.to_str().unwrap(),
+            ],
+        )?;
+
+        // extract control.tar.xz
+        crate::run_cmd(
+            "/usr/bin/tar",
+            &[
+                "-xf",
+                &format!("{}/control.tar.xz", out_dir.display()),
+                "-C",
+                out_dir.to_str().unwrap(),
+            ],
+        )?;
+
+        // create a new directory to extract the data tarball into
+        if let Err(e) = fs::create_dir(&format!("{}/data", out_dir.display())) {
+            return Err(NebulaError::Fs(e.to_string()));
+        }
+
+        // get the data tarball name, could be data.tar.{gz, xz, bz2}
+        let extension = ["gz", "xz", "bz2"]
+            .iter()
+            .find(|e| out_dir.join(format!("data.tar.{}", e)).exists())
+            .expect("Cannot find data tarball inside extracted deb");
+
+        crate::run_cmd(
+            "/usr/bin/tar",
+            &[
+                "-xf",
+                &format!("{}/data.tar.{}", out_dir.display(), extension),
+                "-C",
+                &format!("{}/data", out_dir.display()),
+            ],
+        )
+    }
+
+    /// Return's the hash of the Packages.xz archive. The hash is parsed from the InRelease file
+    pub fn package_file_hash(
+        releasepath: &Path,
+        component: &str,
+        arch: &str,
+    ) -> Result<String, io::Error> {
+        let packages_file = format!("{}/binary-{}/Packages.xz", component, arch);
+        let file = fs::File::open(releasepath)?;
+        let reader = BufReader::new(file);
+
+        let mut sha256 = false;
+        for line in reader.lines() {
+            let line = line?;
+            // find the SHA256 hashes, skip md5
+            if line.contains("SHA256:") {
+                sha256 = true;
+            }
+
+            // find the line where the hash of the package appears
+            if sha256 && line.contains(&packages_file) {
+                return match line.split(' ').nth(1) {
+                    Some(h) => Ok(h.to_string()),
+                    None => Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Not able to parse the hash",
+                    )),
+                };
+            }
+        }
+        Err(io::Error::new(io::ErrorKind::Other, "hash not found"))
+    }
+
+    fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, NebulaError> {
+        let deps_split: Vec<&str> = deps_str.split(", ").collect();
+        let mut dependencies_list = DependsList::new();
+        for dep_str in deps_split {
+            let mut dependency_options = vec![];
+            let splitted: Vec<&str> = dep_str.split(" | ").collect();
+            for pkg_str in splitted {
+                let mut pkg_split = pkg_str.split_whitespace();
+                // get the name of the dependency
+                let dep_name = match pkg_split.next() {
+                    Some(name) => name,
+                    None => return Err(NebulaError::DependencyParseError),
+                };
+                // if exists, get packages version
+                match pkg_split.next() {
+                    Some(cmp_part) => {
+                        // remove the opening parenthesis from string
+                        match pkg_split.next() {
+                            Some(ver) => dependency_options.push(Dependency::from(
+                                dep_name,
+                                Some(
+                                    format!("{}{}", &cmp_part[1..], &ver[..ver.len() - 1]).as_str(),
+                                ),
+                            )),
+                            None => return Err(NebulaError::DependencyParseError),
+                        }
+                    }
+                    None => dependency_options.push(Dependency::from(dep_name, None)),
+                }
+            }
+            // add dependency options to dependency list
+            if dependency_options.len() == 1 {
+                dependencies_list.push(dependency_options.pop().unwrap());
+            } else {
+                dependencies_list.push_opts(dependency_options);
+            }
+        }
+        if !dependencies_list.is_empty() {
+            Ok(Some(dependencies_list))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<'d> Repository for Debian<'d> {
     fn initialize(&self) -> Result<(), NebulaError> {
         if !self.repo_dir.is_dir() {
             fs::create_dir(&self.repo_dir).unwrap(); // create home/repo/debian
         }
         Ok(())
+    }
+
+    fn repo_type(&self) -> RepoType {
+        RepoType::Debian
     }
 
     fn update(&self) -> Result<(), NebulaError> {
@@ -237,158 +387,6 @@ impl<'d> Repository for Debian<'d> {
             Ok(None)
         } else {
             Ok(Some(pkgs_list))
-        }
-    }
-}
-
-impl<'d> Debian<'d> {
-    pub fn new() -> Result<Debian<'d>, NebulaError> {
-        let conf = match &CONFIG.repos().debian() {
-            Some(c) => c,
-            None => return Err(NebulaError::RepoConfigNotFound),
-        };
-
-        let repo_dir = CONFIG.repos_dir().join("debian");
-        Ok(Debian { conf, repo_dir })
-    }
-    pub fn extract_deb(deb_path: &Path) -> Result<(), NebulaError> {
-        // create a directory (with the same name of the deb to extract the deb into)
-        // if it exists delete the old directory first
-        let parent_dir = deb_path.parent().expect("Cannot extract root");
-        let out_dir = parent_dir.join(deb_path.file_stem().unwrap());
-        if out_dir.exists() {
-            if let Err(e) = fs::remove_dir_all(&out_dir) {
-                return Err(NebulaError::Fs(format!(
-                    "cannot clean {}: {}",
-                    out_dir.display(),
-                    e
-                )));
-            }
-        }
-        if let Err(e) = fs::create_dir(&out_dir) {
-            return Err(NebulaError::Fs(format!(
-                "cannot create {}: {}",
-                out_dir.display(),
-                e
-            )));
-        }
-        // extract main deb archive
-        crate::run_cmd(
-            "/usr/bin/ar",
-            &[
-                "x",
-                deb_path.to_str().unwrap(),
-                "--output",
-                out_dir.to_str().unwrap(),
-            ],
-        )?;
-
-        // extract control.tar.xz
-        crate::run_cmd(
-            "/usr/bin/tar",
-            &[
-                "-xf",
-                &format!("{}/control.tar.xz", out_dir.display()),
-                "-C",
-                out_dir.to_str().unwrap(),
-            ],
-        )?;
-
-        // create a new directory to extract the data tarball into
-        if let Err(e) = fs::create_dir(&format!("{}/data", out_dir.display())) {
-            return Err(NebulaError::Fs(e.to_string()));
-        }
-
-        // get the data tarball name, could be data.tar.{gz, xz, bz2}
-        let extension = ["gz", "xz", "bz2"]
-            .iter()
-            .find(|e| out_dir.join(format!("data.tar.{}", e)).exists())
-            .expect("Cannot find data tarball inside extracted deb");
-
-        crate::run_cmd(
-            "/usr/bin/tar",
-            &[
-                "-xf",
-                &format!("{}/data.tar.{}", out_dir.display(), extension),
-                "-C",
-                &format!("{}/data", out_dir.display()),
-            ],
-        )
-    }
-
-    /// Return's the hash of the Packages.xz archive. The hash is parsed from the InRelease file
-    pub fn package_file_hash(
-        releasepath: &Path,
-        component: &str,
-        arch: &str,
-    ) -> Result<String, io::Error> {
-        let packages_file = format!("{}/binary-{}/Packages.xz", component, arch);
-        let file = fs::File::open(releasepath)?;
-        let reader = BufReader::new(file);
-
-        let mut sha256 = false;
-        for line in reader.lines() {
-            let line = line?;
-            // find the SHA256 hashes, skip md5
-            if line.contains("SHA256:") {
-                sha256 = true;
-            }
-
-            // find the line where the hash of the package appears
-            if sha256 && line.contains(&packages_file) {
-                return match line.split(' ').nth(1) {
-                    Some(h) => Ok(h.to_string()),
-                    None => Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Not able to parse the hash",
-                    )),
-                };
-            }
-        }
-        Err(io::Error::new(io::ErrorKind::Other, "hash not found"))
-    }
-
-    fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, NebulaError> {
-        let deps_split: Vec<&str> = deps_str.split(", ").collect();
-        let mut dependencies_list = DependsList::new();
-        for dep_str in deps_split {
-            let mut dependency_options = vec![];
-            let splitted: Vec<&str> = dep_str.split(" | ").collect();
-            for pkg_str in splitted {
-                let mut pkg_split = pkg_str.split_whitespace();
-                // get the name of the dependency
-                let dep_name = match pkg_split.next() {
-                    Some(name) => name,
-                    None => return Err(NebulaError::DependencyParseError),
-                };
-                // if exists, get packages version
-                match pkg_split.next() {
-                    Some(cmp_part) => {
-                        // remove the opening parenthesis from string
-                        match pkg_split.next() {
-                            Some(ver) => dependency_options.push(Dependency::from(
-                                dep_name,
-                                Some(
-                                    format!("{}{}", &cmp_part[1..], &ver[..ver.len() - 1]).as_str(),
-                                ),
-                            )),
-                            None => return Err(NebulaError::DependencyParseError),
-                        }
-                    }
-                    None => dependency_options.push(Dependency::from(dep_name, None)),
-                }
-            }
-            // add dependency options to dependency list
-            if dependency_options.len() == 1 {
-                dependencies_list.push(dependency_options.pop().unwrap());
-            } else {
-                dependencies_list.push_opts(dependency_options);
-            }
-        }
-        if !dependencies_list.is_empty() {
-            Ok(Some(dependencies_list))
-        } else {
-            Ok(None)
         }
     }
 }
