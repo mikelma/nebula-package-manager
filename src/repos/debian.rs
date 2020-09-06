@@ -1,5 +1,7 @@
 use regex::Regex;
 use serde_derive::Deserialize;
+use version_compare::{CompOp, Version};
+
 use std::fs;
 use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -302,6 +304,15 @@ impl<'d> Repository for Debian<'d> {
         let re_src = Regex::new(r"^Filename: (.+)").unwrap();
         let re_depends = Regex::new(r"^Depends: (.+)").unwrap();
 
+        // convert target version in `Version` object
+        let version = match version {
+            Some(ver) => match Version::from(ver) {
+                Some(v) => Some(v),
+                None => return Err(NebulaError::VersionParsingError),
+            },
+            None => None,
+        };
+
         let mut pkgs_list = vec![];
         for component in &self.conf.components {
             let mut buff = BufReader::new(
@@ -339,12 +350,26 @@ impl<'d> Repository for Debian<'d> {
                                     .captures_iter(&line)
                                     .next()
                                     .expect("Cannot capture version");
-                                pkg_version = Some(
-                                    cap.get(1)
-                                        .expect("Cannot gather version")
-                                        .as_str()
-                                        .to_string(),
-                                );
+                                let captured_ver = cap
+                                    .get(1)
+                                    .expect("Cannot gather version")
+                                    .as_str()
+                                    .to_string();
+                                // if a package version is specified
+                                if let Some(target_version) = &version {
+                                    let capt_v = match Version::from(&captured_ver) {
+                                        Some(v) => v,
+                                        None => return Err(NebulaError::NotSupportedVersion),
+                                    };
+                                    // check if the matched package has the target version number
+                                    if capt_v.compare(&target_version) == CompOp::Eq {
+                                        pkg_version = Some(captured_ver)
+                                    }
+                                } else {
+                                    // the package does not have to match a version, all versions
+                                    // are valid
+                                    pkg_version = Some(captured_ver);
+                                }
                             }
                             // get package source
                             if re_src.is_match(&line) {
@@ -381,8 +406,6 @@ impl<'d> Repository for Debian<'d> {
                         } else {
                             return Err(NebulaError::SourceParsingError);
                         }
-                    } else {
-                        return Err(NebulaError::VersionParsingError);
                     }
                 }
             }
