@@ -81,25 +81,54 @@ impl PartialEq for Package {
     }
 }
 
-/// Contains a package dependency. The name of the package and the version (if some) are required.
+/// Contains a package dependency. The name of the package, comparison operator and version are required.
 #[derive(Debug)]
-pub struct Dependency(String, Option<String>);
+pub struct Dependency(String, Option<CompOp>, Option<String>);
 
 impl Dependency {
-    /// Creates a new `Dependency` given the name and version requirement. If there is no version
-    /// requirement, `version_req` parameter must be `None`.
-    pub fn from(name: &str, version_req: Option<&str>) -> Dependency {
-        match version_req {
-            Some(v) => Dependency(name.to_string(), Some(v.to_string())),
-            None => Dependency(name.to_string(), None),
+    /// Creates a new `Dependency` given the name and version requirement.
+    pub fn from(
+        name: &str,
+        comp_op: Option<CompOp>,
+        version_req: Option<&str>,
+    ) -> Result<Dependency, NebulaError> {
+        if let Some(comp) = comp_op {
+            if let Some(ver) = version_req {
+                Ok(Dependency(
+                    name.to_string(),
+                    Some(comp),
+                    Some(ver.to_string()),
+                ))
+            } else {
+                Err(NebulaError::IncompleteDependency)
+            }
+        } else if version_req.is_some() {
+            Err(NebulaError::IncompleteDependency)
+        } else {
+            Ok(Dependency(name.to_string(), None, None))
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+
+    pub fn comp_op(&self) -> &Option<CompOp> {
+        &self.1
+    }
+
+    pub fn version(&self) -> &Option<String> {
+        &self.2
     }
 }
 
 impl fmt::Display for Dependency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.1 {
-            Some(v) => write!(f, "{} {}", self.0, v),
+            Some(op) => match &self.2 {
+                Some(ver) => write!(f, "{} {:?} {}", self.0, op, ver),
+                None => unreachable!(),
+            },
             None => write!(f, "{}", self.0),
         }
     }
@@ -108,7 +137,7 @@ impl fmt::Display for Dependency {
 /// `DependsItem` objects are used as items of `DependsList`. This is useful to express different
 /// dependency types, such as different package options for a dependency or an optional dependency.
 #[derive(Debug)]
-enum DependsItem {
+pub enum DependsItem {
     /// A single dependency. The package completly depends on this package to be present.
     Single(Dependency),
     /// Holds a vector of dependencies (different options), and only one should be installed.
@@ -158,6 +187,10 @@ impl DependsList {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn inner(&self) -> &Vec<DependsItem> {
+        &self.0
+    }
 }
 
 impl fmt::Display for DependsList {
@@ -180,5 +213,46 @@ pub struct PkgSource(RepoType, String);
 impl PkgSource {
     pub fn from(repo_type: RepoType, url: &str) -> PkgSource {
         PkgSource(repo_type, url.to_string())
+    }
+}
+
+pub mod utils {
+    use super::Package;
+    use crate::{NebulaError, Repository};
+
+    pub fn resolve_dependencies(
+        repos: &[impl Repository],
+        package: &Package,
+    ) -> Result<Option<Vec<Package>>, NebulaError> {
+        let dependencies = match package.depends() {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        /*
+        // DEBUG: let mut to_install = vec![];
+        for dependency in dependencies.inner() {
+            let mut matches = vec![];
+            for repo in repos {
+                match dependency {
+                    DependsItem::Single(dep) => {
+                        let ver = match dep.version() {
+                            Some(v) => match Version::from(v) {
+                                Some(ve) => Some(ve),
+                                None => return Err(NebulaError::NotSupportedVersion),
+                            },
+                            None => None,
+                        };
+                        match repo.search(dep.name(), dep.comp_op(), &ver)? {
+                            Some(p) => matches.extend(p),
+                            None => return Err(NebulaError::PackageNotFound),
+                        }
+                    }
+                    DependsItem::Opts(dep_list) => unimplemented!(),
+                }
+            }
+        }
+        */
+        Ok(None)
     }
 }
