@@ -13,4 +13,7 @@ pub enum NebulaError {
     SourceParsingError,
     /// The package version format is unsupported
     NotSupportedVersion,
+    /// if a dependency contains a comp. oper. but not verison or vice versa
+    IncompleteDependency,
+    PackageNotFound,
 }
