@@ -7,8 +7,7 @@ use std::io::{self, BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    download, file2hash, pkg, Dependency, DependsList, NebulaError, Package, RepoType, Repository,
-    CONFIG,
+    pkg, utils, Dependency, DependsList, NebulaError, Package, RepoType, Repository, CONFIG,
 };
 
 // ------------------------------------------------------------------ //
@@ -93,7 +92,7 @@ impl<'d> Debian<'d> {
             )));
         }
         // extract main deb archive
-        crate::run_cmd(
+        utils::run_cmd(
             "/usr/bin/ar",
             &[
                 "x",
@@ -104,7 +103,7 @@ impl<'d> Debian<'d> {
         )?;
 
         // extract control.tar.xz
-        crate::run_cmd(
+        utils::run_cmd(
             "/usr/bin/tar",
             &[
                 "-xf",
@@ -125,7 +124,7 @@ impl<'d> Debian<'d> {
             .find(|e| out_dir.join(format!("data.tar.{}", e)).exists())
             .expect("Cannot find data tarball inside extracted deb");
 
-        crate::run_cmd(
+        utils::run_cmd(
             "/usr/bin/tar",
             &[
                 "-xf",
@@ -241,7 +240,7 @@ impl<'d> Repository for Debian<'d> {
         }
 
         info!("Downloading relase file...");
-        download(
+        utils::download(
             format!("{}/InRelease", self.conf.repository),
             &self.repo_dir.join("InRelease"),
         );
@@ -260,7 +259,7 @@ impl<'d> Repository for Debian<'d> {
             let pkgs_filename = self
                 .repo_dir
                 .join(format!("Packages-{}.xz", component.to_str()));
-            download(
+            utils::download(
                 format!(
                     "{}/{}/binary-{}/Packages.xz",
                     self.conf.repository,
@@ -271,7 +270,7 @@ impl<'d> Repository for Debian<'d> {
             );
 
             // compare expected and computed hash of the downloaded file
-            let real_hash = file2hash(Path::new(&pkgs_filename)).unwrap();
+            let real_hash = utils::file2hash(Path::new(&pkgs_filename)).unwrap();
             if !real_hash.eq(&expected_hash) {
                 error!("Expected and real hash of {}", pkgs_filename.display());
                 return Err(NebulaError::IncorrectHash);
@@ -279,7 +278,7 @@ impl<'d> Repository for Debian<'d> {
 
             // extract Packages.xz file in place
             debug!("extracting {} with unxz", pkgs_filename.display());
-            crate::run_cmd(
+            utils::run_cmd(
                 "/usr/bin/unxz",
                 &["--force", pkgs_filename.to_str().unwrap()],
             )?;
