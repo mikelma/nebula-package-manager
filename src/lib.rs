@@ -19,6 +19,7 @@ pub mod config;
 pub mod errors;
 pub mod pkg;
 pub mod repos;
+pub mod utils;
 
 pub use config::constants::*;
 pub use errors::NebulaError;
