@@ -188,14 +188,16 @@ impl<'d> Debian<'d> {
                         match pkg_split.next() {
                             Some(ver) => dependency_options.push(Dependency::from(
                                 dep_name,
-                                Some(
-                                    format!("{}{}", &cmp_part[1..], &ver[..ver.len() - 1]).as_str(),
-                                ),
-                            )),
+                                Some(match CompOp::from_sign(&cmp_part[1..]) {
+                                    Ok(op) => op,
+                                    Err(_) => return Err(NebulaError::DependencyParseError),
+                                }),
+                                Some(&ver[..ver.len() - 1]),
+                            )?),
                             None => return Err(NebulaError::DependencyParseError),
                         }
                     }
-                    None => dependency_options.push(Dependency::from(dep_name, None)),
+                    None => dependency_options.push(Dependency::from(dep_name, None, None)?),
                 }
             }
             // add dependency options to dependency list
@@ -288,7 +290,8 @@ impl<'d> Repository for Debian<'d> {
     fn search(
         &self,
         name: &str,
-        version: Option<&str>,
+        cmp_op: &Option<CompOp>,
+        version: &Option<Version>,
     ) -> Result<Option<Vec<Package>>, NebulaError> {
         fn read_line(buff: &mut dyn BufRead, line: &mut String) -> Result<usize, NebulaError> {
             line.clear();
@@ -303,15 +306,6 @@ impl<'d> Repository for Debian<'d> {
         let re_version = Regex::new(r"^Version: (.+)").unwrap();
         let re_src = Regex::new(r"^Filename: (.+)").unwrap();
         let re_depends = Regex::new(r"^Depends: (.+)").unwrap();
-
-        // convert target version in `Version` object
-        let version = match version {
-            Some(ver) => match Version::from(ver) {
-                Some(v) => Some(v),
-                None => return Err(NebulaError::VersionParsingError),
-            },
-            None => None,
-        };
 
         let mut pkgs_list = vec![];
         for component in &self.conf.components {
@@ -362,8 +356,17 @@ impl<'d> Repository for Debian<'d> {
                                         None => return Err(NebulaError::NotSupportedVersion),
                                     };
                                     // check if the matched package has the target version number
-                                    if capt_v.compare(&target_version) == CompOp::Eq {
-                                        pkg_version = Some(captured_ver)
+                                    if let Some(cmp) = &cmp_op {
+                                        // if a comp. op. is specified compare versions
+                                        if capt_v.compare(&target_version) == *cmp {
+                                            pkg_version = Some(captured_ver)
+                                        }
+                                    } else {
+                                        // no comp. op. is supplied, so check if both versions are
+                                        // equal
+                                        if capt_v.compare(&target_version) == CompOp::Eq {
+                                            pkg_version = Some(captured_ver)
+                                        }
                                     }
                                 } else {
                                     // the package does not have to match a version, all versions

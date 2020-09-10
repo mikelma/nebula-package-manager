@@ -1,4 +1,5 @@
 use std::fmt;
+use version_compare::{CompOp, Version};
 
 pub mod debian;
 pub mod nebula;
@@ -15,8 +16,16 @@ pub trait Repository {
     fn search(
         &self,
         name: &str,
-        version: Option<&str>,
+        cmp_op: &Option<CompOp>,
+        version: &Option<Version>,
     ) -> Result<Option<Vec<Package>>, NebulaError>;
+
+    fn install(packages: &[Package]) -> Result<(), NebulaError> {
+        for pkg in packages {
+            println!("    - install {}", pkg.name());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
