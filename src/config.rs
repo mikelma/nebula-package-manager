@@ -89,9 +89,9 @@ impl Configuration {
                     c.default();
                     Ok(c)
                 }
-                Err(e) => return Err(NebulaError::TomlDe(e)),
+                Err(e) => Err(NebulaError::TomlDe(e)),
             },
-            Err(e) => return Err(NebulaError::Io(e)),
+            Err(e) => Err(NebulaError::Io(e)),
         }
     }
 

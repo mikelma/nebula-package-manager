@@ -163,7 +163,7 @@ impl fmt::Display for DependsItem {
 }
 
 /// Defines all the dependencies a package might depend on.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DependsList(Vec<DependsItem>);
 
 impl DependsList {
