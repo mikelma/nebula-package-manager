@@ -92,7 +92,7 @@ impl<'d> Debian<'d> {
             )));
         }
         // extract main deb archive
-        utils::run_cmd(
+        utils::cli::run_cmd(
             "/usr/bin/ar",
             &[
                 "x",
@@ -103,7 +103,7 @@ impl<'d> Debian<'d> {
         )?;
 
         // extract control.tar.xz
-        utils::run_cmd(
+        utils::cli::run_cmd(
             "/usr/bin/tar",
             &[
                 "-xf",
@@ -124,7 +124,7 @@ impl<'d> Debian<'d> {
             .find(|e| out_dir.join(format!("data.tar.{}", e)).exists())
             .expect("Cannot find data tarball inside extracted deb");
 
-        utils::run_cmd(
+        utils::cli::run_cmd(
             "/usr/bin/tar",
             &[
                 "-xf",
@@ -270,7 +270,7 @@ impl<'d> Repository for Debian<'d> {
             );
 
             // compare expected and computed hash of the downloaded file
-            let real_hash = utils::file2hash(Path::new(&pkgs_filename)).unwrap();
+            let real_hash = utils::fs::file2hash(Path::new(&pkgs_filename)).unwrap();
             if !real_hash.eq(&expected_hash) {
                 error!("Expected and real hash of {}", pkgs_filename.display());
                 return Err(NebulaError::IncorrectHash);
@@ -278,7 +278,7 @@ impl<'d> Repository for Debian<'d> {
 
             // extract Packages.xz file in place
             debug!("extracting {} with unxz", pkgs_filename.display());
-            utils::run_cmd(
+            utils::cli::run_cmd(
                 "/usr/bin/unxz",
                 &["--force", pkgs_filename.to_str().unwrap()],
             )?;
@@ -357,7 +357,11 @@ impl<'d> Repository for Debian<'d> {
                                     // check if the matched package has the target version number
                                     if let Some(cmp) = &cmp_op {
                                         // if a comp. op. is specified compare versions
-                                        if capt_v.compare(&target_version) == *cmp {
+                                        let cmp_res = capt_v.compare(&target_version);
+                                        if cmp_res == *cmp
+                                            || ((*cmp == CompOp::Ge || *cmp == CompOp::Le)
+                                                && cmp_res == CompOp::Eq)
+                                        {
                                             pkg_version = Some(captured_ver)
                                         }
                                     } else {

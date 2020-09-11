@@ -130,8 +130,8 @@ fn main() {
         }
         // get the selected package and show info
         let pkg = pkgs.get(id - 1).unwrap();
-        print!("\x1B[2J\x1B[1;1H"); // clear screen
-        println!("\n{} {}", pkg.name(), pkg.version());
+        // print!("\x1B[2J\x1B[1;1H"); // clear screen
+        println!("\n\n{} {}", pkg.name(), pkg.version());
 
         let to_install =
             pkg::utils::resolve_dependencies(&repos, &pkg).expect("Cannot resolve dependencies");

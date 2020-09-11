@@ -1,43 +1,10 @@
-use curl::easy::Easy;
 use sha2::{Digest, Sha256};
-
-use std::fs::{self, OpenOptions};
-use std::io::{self, Read, Write};
-use std::os::unix;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use walkdir::WalkDir;
 
-use crate::{NebulaError, Package};
-
-pub fn download(url: String, outfile: &Path) {
-    // delete the file/dir to download if it already exists
-    if outfile.is_dir() && outfile.exists() {
-        fs::remove_dir_all(&outfile).unwrap();
-    }
-    if outfile.is_file() && outfile.exists() {
-        fs::remove_file(&outfile).unwrap();
-    }
-
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(&outfile)
-        .unwrap();
-    let mut handle = Easy::new();
-    handle.url(&url).unwrap();
-    {
-        let mut transfer = handle.transfer();
-        transfer
-            .write_function(|new_data| {
-                file.write_all(new_data).unwrap();
-                Ok(new_data.len())
-            })
-            .unwrap();
-        transfer.perform().unwrap();
-    }
-}
+use std::fs;
+use std::io::Read;
+use std::os::unix;
+use std::path::{Path, PathBuf};
 
 pub fn create_links(src: &Path, dest: &Path) {
     // get absolute form of paths
@@ -107,59 +74,4 @@ pub fn file2hash(filepath: &Path) -> Result<String, ()> {
     let mut buffer = Vec::<u8>::new();
     file.read_to_end(&mut buffer).unwrap();
     Ok(format!("{:x}", Sha256::digest(&buffer)))
-}
-
-pub fn run_cmd(cmd: &str, args: &[&str]) -> Result<(), NebulaError> {
-    // create the command and add arguments if necessary
-    let mut command = Command::new(cmd);
-    if !args.is_empty() {
-        command.args(args);
-    }
-    // execute command as child process
-    let child = match command.output() {
-        Ok(c) => c,
-        Err(e) => {
-            return Err(NebulaError::CmdError(format!(
-                "failed to start {}: {}",
-                cmd, e
-            )));
-        }
-    };
-    // read status and return result
-    if child.status.success() {
-        Ok(())
-    } else {
-        let message = String::from_utf8_lossy(&child.stderr);
-        Err(NebulaError::CmdError(message.to_string()))
-    }
-}
-pub fn choose_from_table(pkgs: &[Package]) -> Result<usize, NebulaError> {
-    for (id, pkg) in pkgs.iter().enumerate() {
-        println!(
-            "[{}] {} {} (deps.: {})",
-            id,
-            pkg.name(),
-            pkg.version(),
-            match pkg.depends() {
-                Some(lst) => lst.len(),
-                None => 0,
-            }
-        );
-    }
-    let id: usize;
-    loop {
-        print!("> ");
-        io::stdout().flush().unwrap();
-        let mut line = String::new();
-        let _n = std::io::stdin().read_line(&mut line).unwrap();
-        line = line.trim_end().to_string();
-        match line.parse::<usize>() {
-            Ok(n) if n > 0 && n <= pkgs.len() => {
-                id = n;
-                break;
-            }
-            Ok(_) | Err(_) => continue,
-        }
-    }
-    Ok(id)
 }
