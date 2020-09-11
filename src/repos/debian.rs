@@ -356,20 +356,25 @@ impl<'d> Repository for Debian<'d> {
                                     };
                                     // check if the matched package has the target version number
                                     if let Some(cmp) = &cmp_op {
-                                        // if a comp. op. is specified compare versions
+                                        // if a comp. op. is specified compare target and pkg versions
                                         let cmp_res = capt_v.compare(&target_version);
                                         if cmp_res == *cmp
-                                            || ((*cmp == CompOp::Ge || *cmp == CompOp::Le)
-                                                && cmp_res == CompOp::Eq)
+                                            || (*cmp == CompOp::Ge
+                                                && (cmp_res == CompOp::Eq || cmp_res == CompOp::Gt))
+                                            || (*cmp == CompOp::Le
+                                                && (cmp_res == CompOp::Eq || cmp_res == CompOp::Lt))
                                         {
                                             pkg_version = Some(captured_ver)
                                         }
                                     } else {
+                                        /*
                                         // no comp. op. is supplied, so check if both versions are
                                         // equal
                                         if capt_v.compare(&target_version) == CompOp::Eq {
                                             pkg_version = Some(captured_ver)
                                         }
+                                        */
+                                        return Err(NebulaError::MissingVersion);
                                     }
                                 } else {
                                     // the package does not have to match a version, all versions

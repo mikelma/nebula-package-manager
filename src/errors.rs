@@ -16,4 +16,6 @@ pub enum NebulaError {
     /// if a dependency contains a comp. oper. but not verison or vice versa
     IncompleteDependency,
     PackageNotFound,
+    MissingVersion,
+    MissingCompOp,
 }
