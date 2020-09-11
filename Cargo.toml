@@ -19,7 +19,8 @@ lazy_static = "1.4.0"
 regex = "1.3.9"
 version-compare = "0.0.11"
 clap = "2"
-cli-table = "0.3"
+# cli-table = "0.3"
+tabular = "0.1.4"
 
 [[bin]]
 name = "nb"
