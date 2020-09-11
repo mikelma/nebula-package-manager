@@ -289,8 +289,7 @@ impl<'d> Repository for Debian<'d> {
     fn search(
         &self,
         name: &str,
-        cmp_op: &Option<CompOp>,
-        version: &Option<Version>,
+        comp_ver: &Option<(CompOp, Version)>,
     ) -> Result<Option<Vec<Package>>, NebulaError> {
         fn read_line(buff: &mut dyn BufRead, line: &mut String) -> Result<usize, NebulaError> {
             line.clear();
@@ -349,32 +348,20 @@ impl<'d> Repository for Debian<'d> {
                                     .as_str()
                                     .to_string();
                                 // if a package version is specified
-                                if let Some(target_version) = &version {
+                                if let Some((comp_op, version)) = &comp_ver {
                                     let capt_v = match Version::from(&captured_ver) {
                                         Some(v) => v,
                                         None => return Err(NebulaError::NotSupportedVersion),
                                     };
-                                    // check if the matched package has the target version number
-                                    if let Some(cmp) = &cmp_op {
-                                        // if a comp. op. is specified compare target and pkg versions
-                                        let cmp_res = capt_v.compare(&target_version);
-                                        if cmp_res == *cmp
-                                            || (*cmp == CompOp::Ge
-                                                && (cmp_res == CompOp::Eq || cmp_res == CompOp::Gt))
-                                            || (*cmp == CompOp::Le
-                                                && (cmp_res == CompOp::Eq || cmp_res == CompOp::Lt))
-                                        {
-                                            pkg_version = Some(captured_ver)
-                                        }
-                                    } else {
-                                        /*
-                                        // no comp. op. is supplied, so check if both versions are
-                                        // equal
-                                        if capt_v.compare(&target_version) == CompOp::Eq {
-                                            pkg_version = Some(captured_ver)
-                                        }
-                                        */
-                                        return Err(NebulaError::MissingVersion);
+                                    // check if the matched package's version fulfills the specified version condition
+                                    let cmp_res = capt_v.compare(&version);
+                                    if cmp_res == *comp_op
+                                        || (*comp_op == CompOp::Ge
+                                            && (cmp_res == CompOp::Eq || cmp_res == CompOp::Gt))
+                                        || (*comp_op == CompOp::Le
+                                            && (cmp_res == CompOp::Eq || cmp_res == CompOp::Lt))
+                                    {
+                                        pkg_version = Some(captured_ver)
                                     }
                                 } else {
                                     // the package does not have to match a version, all versions

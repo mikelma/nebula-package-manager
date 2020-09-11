@@ -3,16 +3,18 @@ extern crate clap;
 extern crate regex;
 
 use clap::Arg;
+/*
 use cli_table::{
     format::{self, CellFormat, Justify},
     Cell, Row, Table,
 };
+*/
 use version_compare::{CompOp, Version};
 
 use std::io::{self, Write};
 use std::process::exit;
 
-use nbpm::{pkg, Package, Repository};
+use nbpm::{utils, Package, Repository};
 
 fn main() {
     let cli_args = app_from_crate!()
@@ -49,44 +51,13 @@ fn main() {
     let repos = nbpm::repos::create_repos().unwrap();
     nbpm::initialize(&repos).unwrap();
 
-    // extract package name, comparison operator and version if some
-    let (pkg_name, comp_op, version) = match cli_args.value_of("PKG") {
-        Some(query) => {
-            // search for comparison operator on the query
-            // NOTE: May use Regex in the future
-            let mut name = None;
-            let mut comp_op = None;
-            let mut version = None;
-            for operator in &["==", ">=", "<=", ">", "<"] {
-                // if an operator is present extract the name, comparison operator and version
-                if query.contains(operator) {
-                    comp_op = Some(CompOp::from_sign(operator).unwrap());
-                    let mut splitted = query.split(operator);
-                    // extract package name
-                    name = splitted.next();
-                    // extract version
-                    version = match splitted.next() {
-                        Some("") | None => {
-                            eprintln!("A version has to be provided");
-                            exit(0);
-                        }
-                        Some(v) => match Version::from(v) {
-                            Some(ver) => Some(ver),
-                            None => {
-                                eprintln!("Unsupported version format: {}", v);
-                                exit(0);
-                            }
-                        },
-                    };
-                    break;
-                }
-            }
-            if name.is_none() {
-                name = Some(query);
-            }
-            (name, comp_op, version)
+    // extract package name and version comparison parameters if some
+    let (pkg_name, pkg_comp) = match cli_args.value_of("PKG") {
+        Some(v) => {
+            let (name, comp) = parse_pkg_info(v);
+            (Some(name), comp)
         }
-        None => (None, None, None),
+        None => (None, None),
     };
 
     // update repositories
@@ -101,12 +72,41 @@ fn main() {
 
     // search for a package
     if cli_args.is_present("search") {
-        search_and_display(&repos, pkg_name.unwrap(), &comp_op, &version, false);
+        match search_pkg(&repos, pkg_name.unwrap(), &pkg_comp) {
+            Some(matches) => utils::cli::display_pkg_list(&matches),
+            None => println!("No packages found"),
+        }
     }
 
     // install a package
     if cli_args.is_present("install") {
-        let pkgs = match search_and_display(&repos, pkg_name.unwrap(), &comp_op, &version, true) {
+        let matches = match search_pkg(&repos, pkg_name.unwrap(), &pkg_comp) {
+            Some(m) => m,
+            None => exit(0),
+        };
+
+        let pkg = match matches.len() {
+            0 => exit(0),
+            1 => match matches.get(0) {
+                Some(p) => p,
+                None => unreachable!(),
+            },
+            _ => {
+                utils::cli::display_pkg_list(&matches);
+                exit(0)
+            }
+        };
+
+        // NOTE: RESOLVE DEPS
+
+        println!(
+            "Do you want to install {} {}? [N/y]",
+            pkg.name(),
+            pkg.version()
+        );
+
+        /*
+        let pkgs = match search_and_display(&repos, pkg_name.unwrap(), &pkg_comp, true) {
             Some(p) => p,
             None => exit(0),
         };
@@ -135,14 +135,67 @@ fn main() {
 
         let to_install =
             pkg::utils::resolve_dependencies(&repos, &pkg).expect("Cannot resolve dependencies");
+        */
     }
 }
 
+fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, Version)>) {
+    // search for comparison operator on the query
+    // NOTE: May use Regex in the future
+    let mut name = text;
+    let mut comp_ver = None;
+    for operator in &["==", ">=", "<=", ">", "<"] {
+        // if an operator is present extract the name, comparison operator and version
+        if text.contains(operator) {
+            let mut splitted = text.split(operator);
+            name = splitted.next().unwrap();
+            comp_ver = match splitted.next() {
+                Some("") | None => {
+                    eprintln!("Missing version after comparison operator");
+                    exit(0);
+                }
+                Some(v) => match Version::from(v) {
+                    Some(ver) => Some((CompOp::from_sign(operator).unwrap(), ver)),
+                    None => {
+                        eprintln!("Unsupported version format: {}", v);
+                        exit(0);
+                    }
+                },
+            };
+            break;
+        }
+    }
+    (name, comp_ver)
+}
+
+fn search_pkg(
+    repos: &[impl Repository],
+    pkg_name: &str,
+    pkg_comp: &Option<(CompOp, Version)>,
+) -> Option<Vec<Package>> {
+    let mut matches = vec![];
+    for repo in repos {
+        match repo.search(pkg_name, &pkg_comp) {
+            Ok(Some(res)) => matches.extend(res),
+            Ok(None) => continue,
+            Err(e) => {
+                eprintln!("Error searchin in repo {}: {:?}", repo.repo_type(), e);
+                exit(1);
+            }
+        }
+    }
+    if matches.is_empty() {
+        None
+    } else {
+        Some(matches)
+    }
+}
+
+/*
 fn search_and_display(
     repos: &[impl Repository],
     query: &str,
-    comp_op: &Option<CompOp>,
-    version: &Option<Version>,
+    comp_ver: &Option<(CompOp, Version)>,
     show_ids: bool,
 ) -> Option<Vec<Package>> {
     // search the package and make a list with packages matching the query
@@ -159,7 +212,7 @@ fn search_and_display(
     let mut id = 1;
     for repo in repos.iter() {
         let repo_type = repo.repo_type().to_string();
-        match repo.search(query, comp_op, version) {
+        match repo.search(query, comp_ver) {
             Ok(Some(res)) => {
                 for pkg in res {
                     let mut new_row = if show_ids {
@@ -191,3 +244,4 @@ fn search_and_display(
     table.print_stdout().expect("Cannot diplay results table");
     Some(pkgs_list)
 }
+*/

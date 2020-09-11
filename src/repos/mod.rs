@@ -16,8 +16,7 @@ pub trait Repository {
     fn search(
         &self,
         name: &str,
-        cmp_op: &Option<CompOp>,
-        version: &Option<Version>,
+        comp_ver: &Option<(CompOp, Version)>,
     ) -> Result<Option<Vec<Package>>, NebulaError>;
 
     fn install(packages: &[Package]) -> Result<(), NebulaError> {

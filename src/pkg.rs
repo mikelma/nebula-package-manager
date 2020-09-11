@@ -214,6 +214,14 @@ impl PkgSource {
     pub fn from(repo_type: RepoType, url: &str) -> PkgSource {
         PkgSource(repo_type, url.to_string())
     }
+
+    pub fn repo_type(&self) -> &RepoType {
+        &self.0
+    }
+
+    pub fn source_url(&self) -> &str {
+        self.1.as_str()
+    }
 }
 
 pub mod utils {

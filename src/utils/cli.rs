@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::process::Command;
+use tabular::{Row, Table};
 
 use crate::{NebulaError, Package};
 
@@ -28,6 +29,36 @@ pub fn run_cmd(cmd: &str, args: &[&str]) -> Result<(), NebulaError> {
     }
 }
 
+pub fn display_pkg_list(pkgs: &[Package]) {
+    if pkgs.is_empty() {
+        return;
+    }
+    let mut table = Table::new("{:<}  {:>}    {:<}   {:>}");
+
+    table.add_row(
+        Row::new()
+            .with_cell("Name")
+            .with_cell("Version")
+            .with_cell("Repository")
+            .with_cell("Num. Dep."),
+    );
+
+    for pkg in pkgs {
+        table.add_row(
+            Row::new()
+                .with_cell(pkg.name())
+                .with_cell(pkg.version())
+                .with_cell(pkg.source().repo_type())
+                .with_cell(match pkg.depends() {
+                    Some(lst) => lst.len(),
+                    None => 0,
+                }),
+        );
+    }
+    println!("{}", table);
+}
+
+/*
 pub fn choose_from_table(pkgs: &[Package]) -> Result<usize, NebulaError> {
     for (id, pkg) in pkgs.iter().enumerate() {
         println!(
@@ -58,3 +89,4 @@ pub fn choose_from_table(pkgs: &[Package]) -> Result<usize, NebulaError> {
     }
     Ok(id)
 }
+*/
