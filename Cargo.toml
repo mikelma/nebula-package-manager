@@ -21,6 +21,7 @@ version-compare = "0.0.11"
 clap = "2"
 # cli-table = "0.3"
 tabular = "0.1.4"
+globset = "0.4.5"
 
 [[bin]]
 name = "nb"

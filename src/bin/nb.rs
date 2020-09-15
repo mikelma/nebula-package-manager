@@ -11,7 +11,7 @@ use cli_table::{
 */
 use version_compare::{CompOp, Version};
 
-use std::io::{self, Write};
+use std::io::{stdin, stdout, Write};
 use std::process::exit;
 
 use nbpm::{utils, Package, Repository};
@@ -72,7 +72,7 @@ fn main() {
 
     // search for a package
     if cli_args.is_present("search") {
-        match search_pkg(&repos, pkg_name.unwrap(), &pkg_comp) {
+        match search_pkg(&repos, (pkg_name.unwrap(), &pkg_comp)) {
             Some(matches) => utils::cli::display_pkg_list(&matches),
             None => println!("No packages found"),
         }
@@ -80,7 +80,7 @@ fn main() {
 
     // install a package
     if cli_args.is_present("install") {
-        let matches = match search_pkg(&repos, pkg_name.unwrap(), &pkg_comp) {
+        let matches = match search_pkg(&repos, (pkg_name.unwrap(), &pkg_comp)) {
             Some(m) => m,
             None => exit(0),
         };
@@ -97,49 +97,36 @@ fn main() {
             }
         };
 
-        // NOTE: RESOLVE DEPS
+        let to_install = match utils::resolve::resolve_dependencies(&repos, &pkg) {
+            Ok(pkgs) => pkgs,
+            Err(e) => {
+                eprintln!("Error resolving dependencies: {:?}", e);
+                exit(1);
+            }
+        };
+        println!("The following packages are going to be installed:");
+        utils::cli::display_pkg_list(&to_install);
 
-        println!(
+        // ask the user for confirmation
+        let mut line = String::new();
+        print!(
             "Do you want to install {} {}? [N/y]",
             pkg.name(),
             pkg.version()
         );
-
-        /*
-        let pkgs = match search_and_display(&repos, pkg_name.unwrap(), &pkg_comp, true) {
-            Some(p) => p,
-            None => exit(0),
-        };
-
-        // get the id of the package to install from stdin
-        println!("Select the package to install");
-        let id: usize;
-        loop {
-            print!("> ");
-            io::stdout().flush().unwrap();
-            let mut line = String::new();
-            let _n = std::io::stdin().read_line(&mut line).unwrap();
-            line = line.trim_end().to_string();
-            match line.parse::<usize>() {
-                Ok(n) if n > 0 && n <= pkgs.len() => {
-                    id = n;
-                    break;
-                }
-                Ok(_) | Err(_) => continue,
-            }
+        stdout().flush().unwrap();
+        let _n = stdin()
+            .read_line(&mut line)
+            .expect("Cannot read user input");
+        line = line.trim_end().to_string();
+        if line != "Y" && line != "y" {
+            println!("Installation cancelled");
+            exit(0);
         }
-        // get the selected package and show info
-        let pkg = pkgs.get(id - 1).unwrap();
-        // print!("\x1B[2J\x1B[1;1H"); // clear screen
-        println!("\n\n{} {}", pkg.name(), pkg.version());
-
-        let to_install =
-            pkg::utils::resolve_dependencies(&repos, &pkg).expect("Cannot resolve dependencies");
-        */
     }
 }
 
-fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, Version)>) {
+fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, &str)>) {
     // search for comparison operator on the query
     // NOTE: May use Regex in the future
     let mut name = text;
@@ -155,7 +142,7 @@ fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, Version)>) {
                     exit(0);
                 }
                 Some(v) => match Version::from(v) {
-                    Some(ver) => Some((CompOp::from_sign(operator).unwrap(), ver)),
+                    Some(_) => Some((CompOp::from_sign(operator).unwrap(), v)),
                     None => {
                         eprintln!("Unsupported version format: {}", v);
                         exit(0);
@@ -170,16 +157,22 @@ fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, Version)>) {
 
 fn search_pkg(
     repos: &[impl Repository],
-    pkg_name: &str,
-    pkg_comp: &Option<(CompOp, Version)>,
+    query: (&str, &Option<(CompOp, &str)>),
 ) -> Option<Vec<Package>> {
     let mut matches = vec![];
     for repo in repos {
-        match repo.search(pkg_name, &pkg_comp) {
-            Ok(Some(res)) => matches.extend(res),
-            Ok(None) => continue,
+        let comp = match &query.1 {
+            Some(c) => Some((c.0.clone(), Version::from(c.1).unwrap())),
+            None => None,
+        };
+        match repo.search(&[(query.0, comp)]) {
+            Ok(res) => matches.extend(res[0].clone()),
             Err(e) => {
-                eprintln!("Error searchin in repo {}: {:?}", repo.repo_type(), e);
+                eprintln!(
+                    "Error searching package in {} repo: {:?}",
+                    repo.repo_type(),
+                    e
+                );
                 exit(1);
             }
         }
@@ -190,58 +183,3 @@ fn search_pkg(
         Some(matches)
     }
 }
-
-/*
-fn search_and_display(
-    repos: &[impl Repository],
-    query: &str,
-    comp_ver: &Option<(CompOp, Version)>,
-    show_ids: bool,
-) -> Option<Vec<Package>> {
-    // search the package and make a list with packages matching the query
-    let mut pkgs_list: Vec<Package> = Vec::new();
-    let justify_left = CellFormat::builder().justify(Justify::Left).build();
-    let mut first_row = if show_ids {
-        vec![Cell::new("Id", justify_left)]
-    } else {
-        vec![]
-    };
-    first_row.push(Cell::new("repository", justify_left));
-    first_row.push(Cell::new("package", justify_left));
-    let mut table_contents = vec![Row::new(first_row)];
-    let mut id = 1;
-    for repo in repos.iter() {
-        let repo_type = repo.repo_type().to_string();
-        match repo.search(query, comp_ver) {
-            Ok(Some(res)) => {
-                for pkg in res {
-                    let mut new_row = if show_ids {
-                        vec![Cell::new(format!("{}", id).as_str(), justify_left)]
-                    } else {
-                        vec![]
-                    };
-                    new_row.push(Cell::new(&repo_type, justify_left));
-                    new_row.push(Cell::new(
-                        format!("{} {}", pkg.name(), pkg.version()).as_str(),
-                        justify_left,
-                    ));
-                    table_contents.push(Row::new(new_row));
-                    id += 1;
-                    pkgs_list.push(pkg);
-                }
-            }
-            Ok(None) => continue,
-            Err(err) => eprintln!("Error searching in {} repo: {:?}", repo.repo_type(), err),
-        }
-    }
-
-    if pkgs_list.is_empty() {
-        return None;
-    }
-
-    let table = Table::new(table_contents, format::NO_BORDER_COLUMN_ROW)
-        .expect("Failed to create results table");
-    table.print_stdout().expect("Cannot diplay results table");
-    Some(pkgs_list)
-}
-*/

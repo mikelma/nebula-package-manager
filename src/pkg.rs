@@ -2,7 +2,7 @@ use crate::{NebulaError, RepoType};
 use std::fmt;
 use version_compare::{CompOp, Version};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Package {
     /// The name of the package (no version included)
     name: String,
@@ -49,6 +49,13 @@ impl Package {
     pub fn depends(&self) -> &Option<DependsList> {
         &self.depends
     }
+
+    pub fn num_deps(&self) -> usize {
+        match &self.depends {
+            Some(list) => list.len(),
+            None => 0,
+        }
+    }
 }
 
 impl fmt::Display for Package {
@@ -82,7 +89,7 @@ impl PartialEq for Package {
 }
 
 /// Contains a package dependency. The name of the package, comparison operator and version are required.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Dependency(String, Option<CompOp>, Option<String>);
 
 impl Dependency {
@@ -94,16 +101,20 @@ impl Dependency {
     ) -> Result<Dependency, NebulaError> {
         if let Some(comp) = comp_op {
             if let Some(ver) = version_req {
+                // check if the provided string as version is supported or correctly formatted
+                if Version::from(ver).is_none() {
+                    return Err(NebulaError::NotSupportedVersion);
+                }
                 Ok(Dependency(
                     name.to_string(),
                     Some(comp),
                     Some(ver.to_string()),
                 ))
             } else {
-                Err(NebulaError::IncompleteDependency)
+                Err(NebulaError::MissingVersion)
             }
         } else if version_req.is_some() {
-            Err(NebulaError::IncompleteDependency)
+            Err(NebulaError::MissingCompOp)
         } else {
             Ok(Dependency(name.to_string(), None, None))
         }
@@ -119,6 +130,23 @@ impl Dependency {
 
     pub fn version(&self) -> &Option<String> {
         &self.2
+    }
+    /// Returns all information about the version requirement of the `Dependency`. If the
+    /// `Dependency` as no version requirement, `None` is returned.
+    pub fn version_comp(&self) -> Option<(CompOp, Version)> {
+        if let Some(comp) = &self.1 {
+            if let Some(ver) = &self.2 {
+                let v = match Version::from(ver) {
+                    Some(v) => v,
+                    None => unreachable!(), // this is checked in the contructor
+                };
+                Some((comp.clone(), v))
+            } else {
+                unreachable!()
+            }
+        } else {
+            None
+        }
     }
 }
 
@@ -136,7 +164,7 @@ impl fmt::Display for Dependency {
 
 /// `DependsItem` objects are used as items of `DependsList`. This is useful to express different
 /// dependency types, such as different package options for a dependency or an optional dependency.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DependsItem {
     /// A single dependency. The package completly depends on this package to be present.
     Single(Dependency),
@@ -163,7 +191,7 @@ impl fmt::Display for DependsItem {
 }
 
 /// Defines all the dependencies a package might depend on.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DependsList(Vec<DependsItem>);
 
 impl DependsList {
@@ -191,6 +219,11 @@ impl DependsList {
     pub fn inner(&self) -> &Vec<DependsItem> {
         &self.0
     }
+    /*
+    pub fn extend(&mut self, other: &DependsList) {
+        self.0.extend(*other.inner());
+    }
+    */
 }
 
 impl fmt::Display for DependsList {
@@ -207,7 +240,7 @@ impl fmt::Display for DependsList {
 
 /// Contains the information about the source of the package: which repo does the package come from
 /// and the url to download the package.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PkgSource(RepoType, String);
 
 impl PkgSource {
@@ -221,46 +254,5 @@ impl PkgSource {
 
     pub fn source_url(&self) -> &str {
         self.1.as_str()
-    }
-}
-
-pub mod utils {
-    use super::Package;
-    use crate::{NebulaError, Repository};
-
-    pub fn resolve_dependencies(
-        repos: &[impl Repository],
-        package: &Package,
-    ) -> Result<Option<Vec<Package>>, NebulaError> {
-        let dependencies = match package.depends() {
-            Some(d) => d,
-            None => return Ok(None),
-        };
-
-        /*
-        // DEBUG: let mut to_install = vec![];
-        for dependency in dependencies.inner() {
-            let mut matches = vec![];
-            for repo in repos {
-                match dependency {
-                    DependsItem::Single(dep) => {
-                        let ver = match dep.version() {
-                            Some(v) => match Version::from(v) {
-                                Some(ve) => Some(ve),
-                                None => return Err(NebulaError::NotSupportedVersion),
-                            },
-                            None => None,
-                        };
-                        match repo.search(dep.name(), dep.comp_op(), &ver)? {
-                            Some(p) => matches.extend(p),
-                            None => return Err(NebulaError::PackageNotFound),
-                        }
-                    }
-                    DependsItem::Opts(dep_list) => unimplemented!(),
-                }
-            }
-        }
-        */
-        Ok(None)
     }
 }

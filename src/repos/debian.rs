@@ -1,9 +1,10 @@
-use regex::Regex;
+// use regex::Regex;
+use globset::{Glob, GlobSetBuilder};
 use serde_derive::Deserialize;
 use version_compare::{CompOp, Version};
 
 use std::fs;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use crate::{
@@ -288,130 +289,113 @@ impl<'d> Repository for Debian<'d> {
 
     fn search(
         &self,
-        name: &str,
-        comp_ver: &Option<(CompOp, Version)>,
-    ) -> Result<Option<Vec<Package>>, NebulaError> {
-        fn read_line(buff: &mut dyn BufRead, line: &mut String) -> Result<usize, NebulaError> {
-            line.clear();
-            match buff.read_line(line) {
-                Ok(n) => Ok(n),
-                Err(e) => Err(NebulaError::Io(e)),
+        queries: &[(&str, Option<(CompOp, Version)>)],
+    ) -> Result<Vec<Vec<Package>>, NebulaError> {
+        let mut builder = GlobSetBuilder::new();
+        for item in queries {
+            builder.add(match Glob::new(format!("Package: {}", item.0).as_str()) {
+                Ok(g) => g,
+                Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+            });
+        }
+        let glob_set = match builder.build() {
+            Ok(g) => g,
+            Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+        };
+
+        // concatenate all package files (one for each component: main, contrib...)
+        let mut files_cat: Option<fs::File> = None;
+        for component in &self.conf.components {
+            let file = fs::File::open(format!(
+                "{}/Packages-{}",
+                self.repo_dir.display(),
+                component.to_str()
+            ))
+            .expect("Packages file for component not found");
+            if let Some(f) = &mut files_cat {
+                f.chain(file);
+            } else {
+                files_cat = Some(file);
             }
         }
-
-        // regex
-        let re = Regex::new(format!(r"^Package: ({}.*)", name).as_str()).unwrap();
-        let re_version = Regex::new(r"^Version: (.+)").unwrap();
-        let re_src = Regex::new(r"^Filename: (.+)").unwrap();
-        let re_depends = Regex::new(r"^Depends: (.+)").unwrap();
-
-        let mut pkgs_list = vec![];
-        for component in &self.conf.components {
-            let mut buff = BufReader::new(
-                fs::File::open(format!(
-                    "{}/Packages-{}",
-                    self.repo_dir.display(),
-                    component.to_str()
-                ))
-                .expect("Package file for component not found"),
-            );
-
-            let mut line = String::new();
-            while read_line(&mut buff, &mut line)? > 0 {
-                // if a line matches the package name
-                if re.is_match(&line) {
-                    let mut continue_read = true;
-
-                    let cap = re.captures_iter(&line).next().expect("Cannot capture name");
-                    let pkg_name = cap.get(1).expect("Cannot gather name").as_str().to_string();
-                    // temporary values for Package
-                    let mut pkg_version = None;
-                    let mut pkg_src = None;
-                    let mut pkg_deps = None;
-                    while read_line(&mut buff, &mut line)? > 0 && continue_read {
-                        // end of info is reached
-                        if line.trim_end().is_empty() {
-                            continue_read = false;
-                            continue;
-
-                        // parse package's info
-                        } else {
-                            // get package version
-                            if re_version.is_match(&line) {
-                                let cap = re_version
-                                    .captures_iter(&line)
-                                    .next()
-                                    .expect("Cannot capture version");
-                                let captured_ver = cap
-                                    .get(1)
-                                    .expect("Cannot gather version")
-                                    .as_str()
-                                    .to_string();
-                                // if a package version is specified
-                                if let Some((comp_op, version)) = &comp_ver {
-                                    let capt_v = match Version::from(&captured_ver) {
-                                        Some(v) => v,
-                                        None => return Err(NebulaError::NotSupportedVersion),
-                                    };
-                                    // check if the matched package's version fulfills the specified version condition
-                                    let cmp_res = capt_v.compare(&version);
-                                    if cmp_res == *comp_op
-                                        || (*comp_op == CompOp::Ge
-                                            && (cmp_res == CompOp::Eq || cmp_res == CompOp::Gt))
-                                        || (*comp_op == CompOp::Le
-                                            && (cmp_res == CompOp::Eq || cmp_res == CompOp::Lt))
-                                    {
-                                        pkg_version = Some(captured_ver)
-                                    }
-                                } else {
-                                    // the package does not have to match a version, all versions
-                                    // are valid
-                                    pkg_version = Some(captured_ver);
+        let reader = match files_cat {
+            Some(r) => BufReader::new(r),
+            None => panic!("No package files for debian repo"),
+        };
+        // let lines: Result<Vec<String>, std::io::Error> = reader.lines().collect();
+        let lines: Vec<String> = match reader.lines().collect() {
+            Ok(s) => s,
+            Err(e) => panic!("Fatal: {}", e),
+        };
+        let mut pkgs_list = vec![vec![]; queries.len()];
+        let mut line_index = 0;
+        while line_index < lines.len() {
+            let line = lines[line_index].trim_end();
+            if glob_set.is_match(&line) {
+                let mut match_indx = glob_set.matches(&line);
+                // set package info variables
+                let name = line[9..].to_string();
+                // package's temporary values
+                let mut version = None; // must be some at the end of the scope
+                let mut source = None; // must be some at the end of the scope
+                let mut depends = None;
+                line_index += 1;
+                while line_index < lines.len() && !match_indx.is_empty() {
+                    let line = lines[line_index].trim_end();
+                    if line.is_empty() {
+                        break; // reached end of package info
+                    }
+                    if line.contains("Version: ") {
+                        let capt_ver = match Version::from(&line[9..]) {
+                            Some(v) => {
+                                version = Some(line[9..].to_string());
+                                v
+                            }
+                            None => return Err(NebulaError::NotSupportedVersion),
+                        };
+                        let mut i = 0;
+                        while i < match_indx.len() {
+                            if let Some((comp_op, comp_ver)) = &queries[match_indx[i]].1 {
+                                if !capt_ver.compare_to(&comp_ver, &comp_op) {
+                                    // if version req. is not satisfied
+                                    match_indx.remove(i); // remove match from match indexes list
                                 }
                             }
-                            // get package source
-                            if re_src.is_match(&line) {
-                                let cap = re_src
-                                    .captures_iter(&line)
-                                    .next()
-                                    .expect("Cannot capture source (Filename)");
-                                let pkg_url = format!(
-                                    "{}/{}",
-                                    self.conf.repository,
-                                    cap.get(1)
-                                        .expect("Cannot gather source (Filename)")
-                                        .as_str()
-                                );
-                                pkg_src = Some(pkg::PkgSource::from(RepoType::Debian, &pkg_url));
-                            }
-                            // get dependencies
-                            if re_depends.is_match(&line) {
-                                let cap = re_depends
-                                    .captures_iter(&line)
-                                    .next()
-                                    .expect("Cannot capture dependencies");
-                                let deps_str = cap
-                                    .get(1)
-                                    .expect("Cannot gather dependencies list")
-                                    .as_str();
-                                pkg_deps = Self::parse_dependecies_str(&deps_str)?;
-                            }
+                            i += 1;
                         }
+                    } else if line.contains("Filename: ") {
+                        source = Some(pkg::PkgSource::from(
+                            RepoType::Debian,
+                            format!("{}/{}", self.conf.repository, &line[8..]).as_str(),
+                        ));
+                    } else if line.starts_with("Depends: ") {
+                        depends = Self::parse_dependecies_str(&line[9..])?;
                     }
-                    if let Some(ver) = pkg_version {
-                        if let Some(src) = pkg_src {
-                            pkgs_list.push(Package::new(&pkg_name, &ver, src, pkg_deps)?);
+                    line_index += 1;
+                }
+                // all info about the matched package has been read and parsed
+                // check if the package still staisfies a a query
+                if !match_indx.is_empty() {
+                    if let Some(v) = version {
+                        if let Some(src) = source {
+                            for mat_i in match_indx {
+                                pkgs_list[mat_i].push(Package::new(
+                                    &name,
+                                    &v,
+                                    src.clone(),
+                                    depends.clone(),
+                                )?);
+                            }
                         } else {
                             return Err(NebulaError::SourceParsingError);
                         }
+                    } else {
+                        return Err(NebulaError::VersionParsingError);
                     }
                 }
             }
+            line_index += 1;
         }
-        if pkgs_list.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(pkgs_list))
-        }
+        Ok(pkgs_list)
     }
 }

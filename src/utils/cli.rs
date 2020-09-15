@@ -1,4 +1,3 @@
-use std::io::{self, Write};
 use std::process::Command;
 use tabular::{Row, Table};
 
@@ -49,10 +48,7 @@ pub fn display_pkg_list(pkgs: &[Package]) {
                 .with_cell(pkg.name())
                 .with_cell(pkg.version())
                 .with_cell(pkg.source().repo_type())
-                .with_cell(match pkg.depends() {
-                    Some(lst) => lst.len(),
-                    None => 0,
-                }),
+                .with_cell(pkg.num_deps()),
         );
     }
     println!("{}", table);

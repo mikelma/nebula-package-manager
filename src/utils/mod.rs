@@ -5,6 +5,7 @@ use std::path::Path;
 
 pub mod cli;
 pub mod fs;
+pub mod resolve;
 
 pub fn download(url: String, outfile: &Path) {
     // delete the file/dir to download if it already exists

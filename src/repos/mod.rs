@@ -15,16 +15,16 @@ pub trait Repository {
     fn update(&self) -> Result<(), NebulaError>;
     fn search(
         &self,
-        name: &str,
-        comp_ver: &Option<(CompOp, Version)>,
-    ) -> Result<Option<Vec<Package>>, NebulaError>;
-
+        queries: &[(&str, Option<(CompOp, Version)>)],
+    ) -> Result<Vec<Vec<Package>>, NebulaError>;
+    /*
     fn install(packages: &[Package]) -> Result<(), NebulaError> {
         for pkg in packages {
             println!("    - install {}", pkg.name());
         }
         Ok(())
     }
+    */
 }
 
 #[derive(Debug, PartialEq, Clone)]
