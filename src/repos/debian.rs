@@ -184,20 +184,21 @@ impl<'d> Debian<'d> {
                 // if exists, get packages version
                 match pkg_split.next() {
                     Some(cmp_part) => {
+                        let cmp_part = &cmp_part[1..].replace("<<", "<").replace(">>", ">");
+                        let comp_op = match CompOp::from_sign(cmp_part) {
+                            Ok(op) => op,
+                            Err(_) => return Err(NebulaError::DependencyParseError),
+                        };
                         // remove the opening parenthesis from string
                         match pkg_split.next() {
                             Some(ver) => dependency_options.push(Dependency::from(
                                 dep_name,
-                                Some(match CompOp::from_sign(&cmp_part[1..]) {
-                                    Ok(op) => op,
-                                    Err(_) => return Err(NebulaError::DependencyParseError),
-                                }),
-                                Some(&ver[..ver.len() - 1]),
+                                Some((comp_op, &ver[..ver.len() - 1])),
                             )?),
                             None => return Err(NebulaError::DependencyParseError),
                         }
                     }
-                    None => dependency_options.push(Dependency::from(dep_name, None, None)?),
+                    None => dependency_options.push(Dependency::from(dep_name, None)?),
                 }
             }
             // add dependency options to dependency list
