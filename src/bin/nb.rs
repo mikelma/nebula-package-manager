@@ -43,6 +43,14 @@ fn main() {
                 .help("install a package PKG"),
         )
         .arg(
+            Arg::with_name("deps graph")
+                .long("deps-graph")
+                .conflicts_with_all(&["update-repos", "search"])
+                .takes_value(true)
+                .value_name("FILE")
+                .help("save the dependency graph of PKG in graphviz DOT format"),
+        )
+        .arg(
             Arg::with_name("PKG")
                 .help("Package name. Can aldso include comparison operator and version number"),
         )
@@ -96,8 +104,11 @@ fn main() {
                 exit(0)
             }
         };
-
-        let to_install = match utils::resolve::resolve_dependencies(&repos, &pkg) {
+        let to_install = match utils::resolve::resolve_dependencies(
+            &repos,
+            &pkg,
+            cli_args.value_of("deps graph"),
+        ) {
             Ok(pkgs) => pkgs,
             Err(e) => {
                 eprintln!("Error resolving dependencies: {:?}", e);

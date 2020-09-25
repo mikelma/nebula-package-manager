@@ -22,6 +22,7 @@ clap = "2"
 # cli-table = "0.3"
 tabular = "0.1.4"
 globset = "0.4.5"
+petgraph = "0.5.1"
 
 [[bin]]
 name = "nb"

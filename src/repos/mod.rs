@@ -33,6 +33,12 @@ pub enum RepoType {
     Nebula,
 }
 
+impl Default for RepoType {
+    fn default() -> Self {
+        RepoType::Nebula
+    }
+}
+
 impl fmt::Display for RepoType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

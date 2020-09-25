@@ -18,4 +18,5 @@ pub enum NebulaError {
     MissingVersion,
     MissingCompOp,
     GlobError(String),
+    DependencyCicle(String),
 }
