@@ -5,7 +5,7 @@ pub mod debian;
 pub mod nebula;
 
 pub use debian::{DebConfig, Debian};
-pub use nebula::NebulaConfig;
+pub use nebula::{NebulaConfig, RepoNebula};
 
 use crate::{NebulaError, Package, CONFIG};
 
@@ -48,12 +48,12 @@ impl fmt::Display for RepoType {
     }
 }
 
-pub fn create_repos() -> Result<Vec<impl Repository>, NebulaError> {
-    let mut repos = vec![];
-    // TODO: Nebula repository init
+pub fn create_repos() -> Result<Vec<Box<dyn Repository>>, NebulaError> {
+    let mut repos: Vec<Box<dyn Repository>> = vec![];
+    repos.push(Box::new(RepoNebula::new()?));
     // debian repo
     if CONFIG.repos().debian().is_some() {
-        repos.push(Debian::new()?);
+        repos.push(Box::new(Debian::new()?));
     }
 
     Ok(repos)

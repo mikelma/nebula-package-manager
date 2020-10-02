@@ -11,7 +11,7 @@ destination-dir = "/home/mike/proiektuak/lfs/nebula/testdir"
 [repositories]
 
     [repositories.nebula]
-    repository = "kaixo"
+    repository = "http://localhost:8080"
 
     [repositories.debian]
     repository = "http://ftp.debian.org/debian/dists/unstable"

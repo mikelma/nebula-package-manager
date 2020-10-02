@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io::Write;
 
 pub fn resolve_dependencies(
-    repos: &[impl Repository],
+    repos: &Vec<Box<dyn Repository>>,
     package: &Package,
     save_graph: Option<&str>,
 ) -> Result<Vec<Package>, NebulaError> {

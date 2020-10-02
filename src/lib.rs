@@ -20,7 +20,7 @@ pub use repos::{create_repos, RepoType, Repository};
 
 /// Checks if all nebula directories are present, if not, creates the needed directories. It also
 /// creates the needed files, such as the logger.
-pub fn initialize(repos: &[impl Repository]) -> Result<(), NebulaError> {
+pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), NebulaError> {
     // check nebula's home and cache directory (inside home directory)
     if !CONFIG.nebulahome().is_dir() {
         create_dir_all(&CONFIG.nebulahome()).unwrap(); // create home
