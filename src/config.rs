@@ -1,4 +1,4 @@
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
@@ -19,7 +19,7 @@ pub mod constants {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Arch {
     #[serde(rename = "amd64")]
     Amd64,
