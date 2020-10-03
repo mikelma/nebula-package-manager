@@ -1,3 +1,4 @@
+use globset::{Glob, GlobSetBuilder};
 use serde_derive::{Deserialize, Serialize};
 use version_compare::{CompOp, Version};
 
@@ -77,7 +78,7 @@ pub struct PkgDB {
 
     #[serde(rename = "core")]
     core_info: Option<Vec<PkgInfo>>,
-    #[serde(rename = "info")]
+    #[serde(rename = "extra")]
     extra_info: Option<Vec<PkgInfo>>,
 
     #[serde(skip, default = "set_default_components")]
@@ -160,8 +161,54 @@ impl PkgDB {
         self.components = Some(comps);
     }
 
-    // pub fn sarch(&self, queries: &[(&str, Option(CompOp, Version)]) -> Option<Vec<Package>>  {
-    // }
+    pub fn search(
+        &self,
+        queries: &Vec<(&str, Option<(CompOp, Version)>)>,
+    ) -> Result<Option<Vec<Vec<Package>>>, NebulaError> {
+        // init glob matchers from query names
+        let mut builder = GlobSetBuilder::new();
+        for item in queries {
+            builder.add(match Glob::new(item.0) {
+                Ok(g) => g,
+                Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+            });
+        }
+        let glob_set = match builder.build() {
+            Ok(g) => g,
+            Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+        };
+        let mut matches = vec![vec![]; queries.len()];
+        for repo_component in [&self.core, &self.extra].iter() {
+            // find for matches in the core repo (if available)
+            if let Some(pkgs) = &repo_component {
+                let mut pkg_index = 0;
+                while pkg_index < pkgs.len() {
+                    let mut m_indexes = glob_set.matches(pkgs[pkg_index].name());
+                    if !m_indexes.is_empty() {
+                        println!("found match: {}", pkgs[pkg_index].name());
+                        let mut i = 0;
+                        while i < m_indexes.len() {
+                            if let Some((comp_op, comp_ver)) = &queries[m_indexes[i]].1 {
+                                if !pkgs[i].version().compare_to(&comp_ver, &comp_op) {
+                                    // if version req. is not satisfied
+                                    m_indexes.remove(i); // remove match from match indexes list
+                                }
+                            }
+                            i += 1;
+                        }
+                        // if there are still some queries matching the package add them to the matches list
+                        if !m_indexes.is_empty() {
+                            for i_m in m_indexes {
+                                matches[i_m].push(pkgs[pkg_index].clone());
+                            }
+                        }
+                    }
+                    pkg_index += 1;
+                }
+            }
+        }
+        Ok(Some(matches))
+    }
 }
 
 // used to set initial values of default atributtes in `Configuration`
@@ -177,12 +224,26 @@ fn set_default_components() -> Option<Vec<Component>> {
 mod test {
     use super::PkgDB;
     use std::path::Path;
+    use version_compare::{CompOp, Version};
 
     #[test]
     fn from_file() {
         let db = PkgDB::from(Path::new("tests/pkgdb.toml")).unwrap();
         println!("{:#?}", db);
         println!("{}", toml::to_string_pretty(&db).unwrap());
-        // panic!();
+        let q = vec![
+            ("linux*", None),
+            ("linux*", Some((CompOp::Lt, Version::from("5.0").unwrap()))),
+            ("test*", None),
+        ];
+        let res = db.search(&q).unwrap();
+        println!("search: {:#?}", res);
+
+        assert!(res.is_some());
+        let res = res.unwrap();
+        assert_eq!(3, res.len());
+        assert_eq!(1, res[0].len());
+        assert_eq!(0, res[1].len());
+        assert_eq!(1, res[2].len());
     }
 }
