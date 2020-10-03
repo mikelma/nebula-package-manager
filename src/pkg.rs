@@ -253,20 +253,34 @@ impl fmt::Display for DependsList {
 }
 
 /// Contains the information about the source of the package: which repo does the package come from
-/// and the url to download the package.
+/// and the url to download the package. If the package does not contain source url, means that the
+/// package is a metapackage.
 #[derive(Debug, PartialEq, Clone, Default)]
-pub struct PkgSource(RepoType, String);
+pub struct PkgSource(RepoType, Option<String>);
 
 impl PkgSource {
-    pub fn from(repo_type: RepoType, url: &str) -> PkgSource {
-        PkgSource(repo_type, url.to_string())
+    pub fn from(repo_type: RepoType, url: Option<&str>) -> PkgSource {
+        let url = match url {
+            Some(u) => Some(u.to_string()),
+            None => None,
+        };
+        PkgSource(repo_type, url)
     }
 
     pub fn repo_type(&self) -> &RepoType {
         &self.0
     }
 
-    pub fn source_url(&self) -> &str {
-        self.1.as_str()
+    pub fn source_url(&self) -> Option<&str> {
+        if let Some(s) = &self.1 {
+            Some(s.as_str())
+        } else {
+            None
+        }
+    }
+
+    /// Returns true when the package is a matepackage
+    pub fn is_meta(&self) -> bool {
+        self.1.is_none()
     }
 }

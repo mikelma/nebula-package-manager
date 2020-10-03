@@ -367,7 +367,7 @@ impl<'d> Repository for Debian<'d> {
                     } else if line.contains("Filename: ") {
                         source = Some(pkg::PkgSource::from(
                             RepoType::Debian,
-                            format!("{}/{}", self.conf.repository, &line[8..]).as_str(),
+                            Some(format!("{}/{}", self.conf.repository, &line[8..]).as_str()),
                         ));
                     } else if line.starts_with("Depends: ") {
                         depends = Self::parse_dependecies_str(&line[9..])?;
@@ -378,17 +378,17 @@ impl<'d> Repository for Debian<'d> {
                 // check if the package still staisfies a a query
                 if !match_indx.is_empty() {
                     if let Some(v) = version {
-                        if let Some(src) = source {
-                            for mat_i in match_indx {
-                                pkgs_list[mat_i].push(Package::new(
-                                    &name,
-                                    &v,
-                                    src.clone(),
-                                    depends.clone(),
-                                )?);
-                            }
-                        } else {
-                            return Err(NebulaError::SourceParsingError);
+                        let source = match source {
+                            Some(s) => s,
+                            None => pkg::PkgSource::from(RepoType::Debian, None),
+                        };
+                        for mat_i in match_indx {
+                            pkgs_list[mat_i].push(Package::new(
+                                &name,
+                                &v,
+                                source.clone(),
+                                depends.clone(),
+                            )?);
                         }
                     } else {
                         return Err(NebulaError::VersionParsingError);

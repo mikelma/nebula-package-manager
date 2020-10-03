@@ -10,6 +10,7 @@ use std::fs::{create_dir, create_dir_all, File};
 pub mod config;
 pub mod errors;
 pub mod pkg;
+pub mod pkgdb;
 pub mod repos;
 pub mod utils;
 
@@ -59,4 +60,3 @@ pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), NebulaError> {
 
     Ok(())
 }
-
