@@ -163,8 +163,8 @@ impl PkgDB {
 
     pub fn search(
         &self,
-        queries: &Vec<(&str, Option<(CompOp, Version)>)>,
-    ) -> Result<Option<Vec<Vec<Package>>>, NebulaError> {
+        queries: &[(&str, Option<(CompOp, Version)>)],
+    ) -> Result<Vec<Vec<Package>>, NebulaError> {
         // init glob matchers from query names
         let mut builder = GlobSetBuilder::new();
         for item in queries {
@@ -207,7 +207,7 @@ impl PkgDB {
                 }
             }
         }
-        Ok(Some(matches))
+        Ok(matches)
     }
 }
 
@@ -239,8 +239,6 @@ mod test {
         let res = db.search(&q).unwrap();
         println!("search: {:#?}", res);
 
-        assert!(res.is_some());
-        let res = res.unwrap();
         assert_eq!(3, res.len());
         assert_eq!(1, res[0].len());
         assert_eq!(0, res[1].len());
