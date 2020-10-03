@@ -59,10 +59,10 @@ fn main() {
     let repos = nbpm::repos::create_repos().unwrap();
     nbpm::initialize(&repos).unwrap();
 
-    // extract package name and version comparison parameters if some
+    // extract package name and version comparison parameters if some, else return (None, None)
     let (pkg_name, pkg_comp) = match cli_args.value_of("PKG") {
         Some(v) => {
-            let (name, comp) = parse_pkg_info(v);
+            let (name, comp) = utils::parse_pkg_str_info(v).unwrap();
             (Some(name), comp)
         }
         None => (None, None),
@@ -137,37 +137,8 @@ fn main() {
     }
 }
 
-fn parse_pkg_info(text: &str) -> (&str, Option<(CompOp, &str)>) {
-    // search for comparison operator on the query
-    // NOTE: May use Regex in the future
-    let mut name = text;
-    let mut comp_ver = None;
-    for operator in &["==", ">=", "<=", ">", "<"] {
-        // if an operator is present extract the name, comparison operator and version
-        if text.contains(operator) {
-            let mut splitted = text.split(operator);
-            name = splitted.next().unwrap();
-            comp_ver = match splitted.next() {
-                Some("") | None => {
-                    eprintln!("Missing version after comparison operator");
-                    exit(0);
-                }
-                Some(v) => match Version::from(v) {
-                    Some(_) => Some((CompOp::from_sign(operator).unwrap(), v)),
-                    None => {
-                        eprintln!("Unsupported version format: {}", v);
-                        exit(0);
-                    }
-                },
-            };
-            break;
-        }
-    }
-    (name, comp_ver)
-}
-
 fn search_pkg(
-    repos: &[impl Repository],
+    repos: &Vec<Box<dyn Repository>>,
     query: (&str, &Option<(CompOp, &str)>),
 ) -> Option<Vec<Package>> {
     let mut matches = vec![];
