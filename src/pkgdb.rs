@@ -185,7 +185,6 @@ impl PkgDB {
                 while pkg_index < pkgs.len() {
                     let mut m_indexes = glob_set.matches(pkgs[pkg_index].name());
                     if !m_indexes.is_empty() {
-                        println!("found match: {}", pkgs[pkg_index].name());
                         let mut i = 0;
                         while i < m_indexes.len() {
                             if let Some((comp_op, comp_ver)) = &queries[m_indexes[i]].1 {
