@@ -42,7 +42,7 @@ pub fn display_pkg_list(pkgs: &[Package]) {
             .with_cell("Num. Dep."),
     );
 
-    for pkg in pkgs {
+    for pkg in pkgs.iter().rev() {
         table.add_row(
             Row::new()
                 .with_cell(pkg.name())
