@@ -55,6 +55,48 @@ impl DebConfig {
 //                          Functionalities
 // ------------------------------------------------------------------ //
 
+const DEB_REPO_DIR: &'static str = "debian";
+
+lazy_static! {
+    /// Debian repository index (Package indexes for all components are stored concatenated).
+    /// The index is loaded in the first call to the variable, this avoids loading the large sized
+    /// indexes repeatedly into memory.
+    pub static ref DEB_REPO_INDEX: Vec<String> = {
+        // get needed information about the repo to load the debian repo index
+        let conf = match CONFIG.repos().debian() {
+            Some(c) => c,
+            None => panic!("Debian repo index has been called when \
+                no debian configuration was initialized"),
+        };
+        let deb_repo_dir = CONFIG.repos_dir().join(DEB_REPO_DIR);
+
+        // concatenate all package files (one for each component: main, contrib...)
+        let mut files_cat: Option<fs::File> = None;
+        for component in conf.components().iter() {
+            let file = fs::File::open(format!(
+                "{}/Packages-{}",
+                deb_repo_dir.display(),
+                component.to_str()
+            ))
+            .expect("Packages file for component not found");
+            if let Some(f) = &mut files_cat {
+                f.chain(file);
+            } else {
+                files_cat = Some(file);
+            }
+        }
+        let reader = match files_cat {
+            Some(r) => BufReader::new(r),
+            None => panic!("No package files for debian repo"),
+        };
+        // let lines: Result<Vec<String>, std::io::Error> = reader.lines().collect();
+        match reader.lines().collect() {
+            Ok(s) => s,
+            Err(e) => panic!("Fatal: {}", e),
+        }
+    };
+}
+
 pub struct Debian<'d> {
     conf: &'d DebConfig,
     // here debian configuration independent variables are defined
@@ -68,7 +110,7 @@ impl<'d> Debian<'d> {
             None => return Err(NebulaError::RepoConfigNotFound),
         };
 
-        let repo_dir = CONFIG.repos_dir().join("debian");
+        let repo_dir = CONFIG.repos_dir().join(DEB_REPO_DIR);
         Ok(Debian { conf, repo_dir })
     }
     pub fn extract_deb(deb_path: &Path) -> Result<(), NebulaError> {
@@ -304,6 +346,7 @@ impl<'d> Repository for Debian<'d> {
             Err(e) => return Err(NebulaError::GlobError(e.to_string())),
         };
 
+        /*
         // concatenate all package files (one for each component: main, contrib...)
         let mut files_cat: Option<fs::File> = None;
         for component in &self.conf.components {
@@ -328,10 +371,11 @@ impl<'d> Repository for Debian<'d> {
             Ok(s) => s,
             Err(e) => panic!("Fatal: {}", e),
         };
+        */
         let mut pkgs_list = vec![vec![]; queries.len()];
         let mut line_index = 0;
-        while line_index < lines.len() {
-            let line = lines[line_index].trim_end();
+        while line_index < DEB_REPO_INDEX.len() {
+            let line = DEB_REPO_INDEX[line_index].trim_end();
             if glob_set.is_match(&line) {
                 let mut match_indx = glob_set.matches(&line);
                 // set package info variables
@@ -341,8 +385,8 @@ impl<'d> Repository for Debian<'d> {
                 let mut source = None; // must be some at the end of the scope
                 let mut depends = None;
                 line_index += 1;
-                while line_index < lines.len() && !match_indx.is_empty() {
-                    let line = lines[line_index].trim_end();
+                while line_index < DEB_REPO_INDEX.len() && !match_indx.is_empty() {
+                    let line = DEB_REPO_INDEX[line_index].trim_end();
                     if line.is_empty() {
                         break; // reached end of package info
                     }
