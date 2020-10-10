@@ -1,5 +1,9 @@
-use std::fmt;
 use version_compare::{CompOp, Version};
+
+use std::error::Error;
+use std::fmt;
+
+use crate::{errors::*, Package, CONFIG};
 
 pub mod debian;
 pub mod nebula;
@@ -7,16 +11,14 @@ pub mod nebula;
 pub use debian::{DebConfig, Debian};
 pub use nebula::{NebulaConfig, RepoNebula};
 
-use crate::{NebulaError, Package, CONFIG};
-
 pub trait Repository {
-    fn initialize(&self) -> Result<(), NebulaError>;
+    fn initialize(&self) -> Result<(), Box<dyn Error>>;
     fn repo_type(&self) -> RepoType;
-    fn update(&self) -> Result<(), NebulaError>;
+    fn update(&self) -> Result<(), Box<dyn Error>>;
     fn search(
         &self,
         queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, NebulaError>;
+    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>>;
     /*
     fn install(packages: &[Package]) -> Result<(), NebulaError> {
         for pkg in packages {
@@ -48,9 +50,9 @@ impl fmt::Display for RepoType {
     }
 }
 
-pub fn create_repos() -> Result<Vec<Box<dyn Repository>>, NebulaError> {
+pub fn create_repos() -> Result<Vec<Box<dyn Repository>>, Box<dyn Error>> {
     let mut repos: Vec<Box<dyn Repository>> = vec![];
-    repos.push(Box::new(RepoNebula::new()?));
+    repos.push(Box::new(RepoNebula::new()));
     // debian repo
     if CONFIG.repos().debian().is_some() {
         repos.push(Box::new(Debian::new()?));

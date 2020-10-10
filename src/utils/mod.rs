@@ -2,11 +2,12 @@
 use reqwest;
 use version_compare::{CompOp, Version};
 
+use std::error::Error;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 
-use crate::NebulaError;
+use crate::errors::*;
 
 pub mod cli;
 pub mod fs;
@@ -27,12 +28,15 @@ pub fn parse_pkg_str_info(text: &str) -> Result<(&str, Option<(CompOp, &str)>), 
             name = splitted.next().unwrap();
             comp_ver = match splitted.next() {
                 Some("") | None => {
-                    return Err(NebulaError::MissingVersion);
+                    return Err(NebulaError::from_msg(
+                        "comparison operator found, but version is missing",
+                        NbErrType::Parsing,
+                    ));
                 }
                 Some(v) => match Version::from(v) {
                     Some(_) => Some((CompOp::from_sign(operator).unwrap(), v)),
                     None => {
-                        return Err(NebulaError::NotSupportedVersion);
+                        return Err(NebulaError::from_msg(v, NbErrType::VersionFmt));
                     }
                 },
             };
@@ -42,21 +46,21 @@ pub fn parse_pkg_str_info(text: &str) -> Result<(&str, Option<(CompOp, &str)>), 
     Ok((name, comp_ver))
 }
 
-pub fn download(url: String, outfile: &Path) {
+pub fn download(url: String, outfile: &Path) -> Result<(), Box<dyn Error>> {
     // delete the file/dir to download if it already exists
     if outfile.is_dir() && outfile.exists() {
-        std::fs::remove_dir_all(&outfile).unwrap();
+        std::fs::remove_dir_all(&outfile)?;
     }
     if outfile.is_file() && outfile.exists() {
-        std::fs::remove_file(&outfile).unwrap();
+        std::fs::remove_file(&outfile)?;
     }
 
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
         .append(true)
-        .open(&outfile)
-        .unwrap();
-    let body = reqwest::blocking::get(&url).unwrap();
-    file.write_all(&body.bytes().unwrap()).unwrap();
+        .open(&outfile)?;
+    let body = reqwest::blocking::get(&url)?;
+    file.write_all(&body.bytes()?)?;
+    Ok(())
 }

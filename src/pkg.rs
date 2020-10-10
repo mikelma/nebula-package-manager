@@ -1,6 +1,9 @@
-use crate::{NebulaError, RepoType};
-use std::fmt;
 use version_compare::{CompOp, Version};
+
+use std::error::Error;
+use std::fmt;
+
+use crate::{errors::*, RepoType};
 
 #[derive(Debug, Clone, Default)]
 pub struct Package {
@@ -23,7 +26,7 @@ impl Package {
     ) -> Result<Package, NebulaError> {
         // check if the provided version has a compatible format with `version_compare`
         if Version::from(&version).is_none() {
-            return Err(NebulaError::NotSupportedVersion);
+            return Err(NebulaError::from_msg(version, NbErrType::VersionFmt));
         }
 
         Ok(Package {
@@ -110,7 +113,7 @@ impl Dependency {
         if let Some((comp, ver)) = comp_op {
             // check if the provided string as version is supported or correctly formatted
             if Version::from(ver).is_none() {
-                return Err(NebulaError::NotSupportedVersion);
+                return Err(NebulaError::from_msg(ver, NbErrType::VersionFmt));
             }
             Ok(Dependency(name.to_string(), Some((comp, ver.to_string()))))
         } else {

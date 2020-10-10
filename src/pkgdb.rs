@@ -2,12 +2,13 @@ use globset::{Glob, GlobSetBuilder};
 use serde_derive::{Deserialize, Serialize};
 use version_compare::{CompOp, Version};
 
+use std::error::Error;
 use std::fs;
 use std::path::Path;
 
 use crate::config::Arch;
 use crate::pkg::{Dependency, DependsItem, DependsList, PkgSource};
-use crate::{utils, NebulaError, Package, RepoType};
+use crate::{errors::*, utils, Package, RepoType};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Component {
@@ -44,7 +45,10 @@ impl PkgInfo {
         let mut dep_list = DependsList::new();
         for dep_str in deps_str {
             if dep_str.is_empty() {
-                return Err(NebulaError::DependencyParseError);
+                return Err(NebulaError::from_msg(
+                    "Empty dependency while converting string to dependency",
+                    NbErrType::Parsing,
+                ));
             }
             let or_split: Vec<&str> = dep_str.split(" or ").collect();
             let mut opts = vec![];
@@ -54,7 +58,10 @@ impl PkgInfo {
                 opts.push(dep);
             }
             if opts.is_empty() {
-                return Err(NebulaError::DependencyParseError);
+                return Err(NebulaError::from_msg(
+                    "Optional deps. empty while converting string to dependecies",
+                    NbErrType::Parsing,
+                ));
             } else if opts.len() == 1 {
                 // push single dependecy
                 dep_list.push(opts.pop().unwrap());
@@ -90,7 +97,7 @@ pub struct PkgDB {
 }
 
 impl PkgDB {
-    pub fn from(path: &Path) -> Result<PkgDB, NebulaError> {
+    pub fn from(path: &Path) -> Result<PkgDB, Box<dyn Error>> {
         // read configuration file
         match fs::read_to_string(path) {
             // deserialize configuration file
@@ -128,9 +135,9 @@ impl PkgDB {
                     c.set_extra(extra);
                     Ok(c)
                 }
-                Err(e) => Err(NebulaError::TomlDe(e)),
+                Err(e) => Err(Box::new(e)),
             },
-            Err(e) => Err(NebulaError::Io(e)),
+            Err(e) => Err(Box::new(e)),
         }
     }
 
@@ -164,18 +171,18 @@ impl PkgDB {
     pub fn search(
         &self,
         queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, NebulaError> {
+    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
         // init glob matchers from query names
         let mut builder = GlobSetBuilder::new();
         for item in queries {
             builder.add(match Glob::new(item.0) {
                 Ok(g) => g,
-                Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+                Err(e) => return Err(Box::new(e)),
             });
         }
         let glob_set = match builder.build() {
             Ok(g) => g,
-            Err(e) => return Err(NebulaError::GlobError(e.to_string())),
+            Err(e) => return Err(Box::new(e)),
         };
         let mut matches = vec![vec![]; queries.len()];
         for repo_component in [&self.core, &self.extra].iter() {

@@ -1,21 +1,22 @@
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
+use std::error::Error;
 use std::fs;
 use std::io::Read;
 use std::os::unix;
 use std::path::{Path, PathBuf};
 
-pub fn create_links(src: &Path, dest: &Path) {
+pub fn create_links(src: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
     // get absolute form of paths
-    let src = fs::canonicalize(src).unwrap();
-    let dest = fs::canonicalize(dest).unwrap();
+    let src = fs::canonicalize(src)?;
+    let dest = fs::canonicalize(dest)?;
 
     let mut links = Vec::<PathBuf>::new();
     for src_entry in WalkDir::new(&src) {
-        let src_entry = src_entry.unwrap();
+        let src_entry = src_entry?;
         // remove src directory pat from entry
-        let path = src_entry.path().strip_prefix(&src).unwrap();
+        let path = src_entry.path().strip_prefix(&src)?;
 
         //println!("{}", path.display());
         let new_path = dest.join(path);
@@ -66,12 +67,13 @@ pub fn create_links(src: &Path, dest: &Path) {
             }
         }
     }
+    Ok(())
 }
 
 /// Computes the Sha256 hash of the given file.
-pub fn file2hash(filepath: &Path) -> Result<String, ()> {
-    let mut file = fs::File::open(filepath).unwrap();
+pub fn file2hash(filepath: &Path) -> Result<String, Box<dyn Error>> {
+    let mut file = fs::File::open(filepath)?;
     let mut buffer = Vec::<u8>::new();
-    file.read_to_end(&mut buffer).unwrap();
+    file.read_to_end(&mut buffer)?;
     Ok(format!("{:x}", Sha256::digest(&buffer)))
 }

@@ -1,7 +1,7 @@
 use std::process::Command;
 use tabular::{Row, Table};
 
-use crate::{NebulaError, Package};
+use crate::{errors::*, Package};
 
 pub fn run_cmd(cmd: &str, args: &[&str]) -> Result<(), NebulaError> {
     // create the command and add arguments if necessary
@@ -13,18 +13,23 @@ pub fn run_cmd(cmd: &str, args: &[&str]) -> Result<(), NebulaError> {
     let child = match command.output() {
         Ok(c) => c,
         Err(e) => {
-            return Err(NebulaError::CmdError(format!(
-                "failed to start {}: {}",
-                cmd, e
-            )));
+            return Err(NebulaError::from_msg(
+                format!("failed to start {}: {}", cmd, e).as_str(),
+                NbErrType::Cmd,
+            ));
         }
     };
     // read status and return result
     if child.status.success() {
         Ok(())
     } else {
-        let message = String::from_utf8_lossy(&child.stderr);
-        Err(NebulaError::CmdError(message.to_string()))
+        let msg = String::from_utf8_lossy(&child.stderr);
+        // convert the arguments string to a single and readable string
+        let args_str: String = args.iter().map(|x| format!(" {}", x)).collect();
+        Err(NebulaError::from_msg(
+            format!("{}{}: {}", cmd, args_str, msg).as_str(),
+            NbErrType::Cmd,
+        ))
     }
 }
 

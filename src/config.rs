@@ -1,8 +1,9 @@
 use serde_derive::{Deserialize, Serialize};
+
+use std::error::Error;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
-use crate::errors::NebulaError;
 use crate::repos::{DebConfig, NebulaConfig};
 
 pub mod constants {
@@ -80,7 +81,7 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub fn from(path: &Path) -> Result<Configuration, NebulaError> {
+    pub fn from(path: &Path) -> Result<Configuration, Box<dyn Error>> {
         // read configuration file
         match read_to_string(path) {
             // deserialize configuration file
@@ -89,9 +90,9 @@ impl Configuration {
                     c.default();
                     Ok(c)
                 }
-                Err(e) => Err(NebulaError::TomlDe(e)),
+                Err(e) => Err(Box::new(e)),
             },
-            Err(e) => Err(NebulaError::Io(e)),
+            Err(e) => Err(Box::new(e)),
         }
     }
 

@@ -1,12 +1,14 @@
 use crate::{
+    errors::*,
     pkg::{DependsItem, DependsList},
-    NebulaError, Package, Repository,
+    Package, Repository,
 };
 use petgraph::dot::{Config, Dot};
 use petgraph::{graph::NodeIndex, Graph};
 // use std::cell::RefCell;
 // use version_compare::Version;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
@@ -14,7 +16,7 @@ pub fn resolve_dependencies(
     repos: &Vec<Box<dyn Repository>>,
     package: &Package,
     save_graph: Option<&str>,
-) -> Result<Vec<Package>, NebulaError> {
+) -> Result<Vec<Package>, Box<dyn Error>> {
     let mut deps_graph = Graph::<Package, Package>::new();
 
     let target_pkg = deps_graph.add_node(package.clone());
@@ -142,13 +144,13 @@ pub fn resolve_dependencies(
     if let Some(file_name) = save_graph {
         let mut file = match File::create(file_name) {
             Ok(f) => f,
-            Err(e) => return Err(NebulaError::Fs(e.to_string())),
+            Err(e) => return Err(Box::new(e)),
         };
         // println!("{}", Dot::with_config(&deps_graph, &[Config::EdgeNoLabel]));
         if let Err(e) = file.write_all(
             format!("{}", Dot::with_config(&deps_graph, &[Config::EdgeNoLabel])).as_bytes(),
         ) {
-            return Err(NebulaError::Io(e));
+            return Err(Box::new(e));
         }
     }
 
@@ -157,12 +159,14 @@ pub fn resolve_dependencies(
     let sorted = match petgraph::algo::toposort(&deps_graph, None) {
         Ok(s) => s,
         Err(c) => {
-            return Err(NebulaError::DependencyCicle(
-                deps_graph[c.node_id()].to_string(),
-            ))
+            return Err(Box::new(NebulaError::from_msg(
+                deps_graph[c.node_id()].to_string().as_str(),
+                NbErrType::DependencyCicle,
+            )));
         }
     };
     let mut res = vec![];
     sorted.iter().for_each(|i| res.push(deps_graph[*i].clone()));
     Ok(res)
 }
+

@@ -3,12 +3,13 @@ use globset::{Glob, GlobSetBuilder};
 use serde_derive::Deserialize;
 use version_compare::{CompOp, Version};
 
+use std::error::Error;
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use crate::{
-    pkg, utils, Dependency, DependsList, NebulaError, Package, RepoType, Repository, CONFIG,
+    errors::*, pkg, utils, Dependency, DependsList, Package, RepoType, Repository, CONFIG,
 };
 
 // ------------------------------------------------------------------ //
@@ -65,7 +66,7 @@ lazy_static! {
         // get needed information about the repo to load the debian repo index
         let conf = match CONFIG.repos().debian() {
             Some(c) => c,
-            None => panic!("Debian repo index has been called when \
+            None => panic!("Debian repo index called when \
                 no debian configuration was initialized"),
         };
         let deb_repo_dir = CONFIG.repos_dir().join(DEB_REPO_DIR);
@@ -107,33 +108,27 @@ impl<'d> Debian<'d> {
     pub fn new() -> Result<Debian<'d>, NebulaError> {
         let conf = match &CONFIG.repos().debian() {
             Some(c) => c,
-            None => return Err(NebulaError::RepoConfigNotFound),
+            None => {
+                return Err(NebulaError::from_msg(
+                    "Debian repository config not found",
+                    NbErrType::Repo,
+                ))
+            }
         };
 
         let repo_dir = CONFIG.repos_dir().join(DEB_REPO_DIR);
         Ok(Debian { conf, repo_dir })
     }
-    pub fn extract_deb(deb_path: &Path) -> Result<(), NebulaError> {
+    pub fn extract_deb(deb_path: &Path) -> Result<(), Box<dyn Error>> {
         // create a directory (with the same name of the deb to extract the deb into)
         // if it exists delete the old directory first
         let parent_dir = deb_path.parent().expect("Cannot extract root");
         let out_dir = parent_dir.join(deb_path.file_stem().unwrap());
         if out_dir.exists() {
-            if let Err(e) = fs::remove_dir_all(&out_dir) {
-                return Err(NebulaError::Fs(format!(
-                    "cannot clean {}: {}",
-                    out_dir.display(),
-                    e
-                )));
-            }
+            fs::remove_dir_all(&out_dir)?;
         }
-        if let Err(e) = fs::create_dir(&out_dir) {
-            return Err(NebulaError::Fs(format!(
-                "cannot create {}: {}",
-                out_dir.display(),
-                e
-            )));
-        }
+        fs::create_dir(&out_dir)?;
+
         // extract main deb archive
         utils::cli::run_cmd(
             "/usr/bin/ar",
@@ -157,9 +152,7 @@ impl<'d> Debian<'d> {
         )?;
 
         // create a new directory to extract the data tarball into
-        if let Err(e) = fs::create_dir(&format!("{}/data", out_dir.display())) {
-            return Err(NebulaError::Fs(e.to_string()));
-        }
+        fs::create_dir(&format!("{}/data", out_dir.display()))?;
 
         // get the data tarball name, could be data.tar.{gz, xz, bz2}
         let extension = ["gz", "xz", "bz2"]
@@ -175,7 +168,8 @@ impl<'d> Debian<'d> {
                 "-C",
                 &format!("{}/data", out_dir.display()),
             ],
-        )
+        )?;
+        Ok(())
     }
 
     /// Return's the hash of the Packages.xz archive. The hash is parsed from the InRelease file
@@ -183,7 +177,7 @@ impl<'d> Debian<'d> {
         releasepath: &Path,
         component: &str,
         arch: &str,
-    ) -> Result<String, io::Error> {
+    ) -> Result<String, Box<dyn Error>> {
         let packages_file = format!("{}/binary-{}/Packages.xz", component, arch);
         let file = fs::File::open(releasepath)?;
         let reader = BufReader::new(file);
@@ -200,14 +194,17 @@ impl<'d> Debian<'d> {
             if sha256 && line.contains(&packages_file) {
                 return match line.split(' ').nth(1) {
                     Some(h) => Ok(h.to_string()),
-                    None => Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Not able to parse the hash",
-                    )),
+                    None => Err(Box::new(NebulaError::from_msg(
+                        "Unable to parse Packages.xz file's hash from debian Release",
+                        NbErrType::Parsing,
+                    ))),
                 };
             }
         }
-        Err(io::Error::new(io::ErrorKind::Other, "hash not found"))
+        Err(Box::new(NebulaError::from_msg(
+            "Hash of Packages.xz not found in Relsease file",
+            NbErrType::Parsing,
+        )))
     }
 
     fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, NebulaError> {
@@ -221,7 +218,12 @@ impl<'d> Debian<'d> {
                 // get the name of the dependency
                 let dep_name = match pkg_split.next() {
                     Some(name) => name,
-                    None => return Err(NebulaError::DependencyParseError),
+                    None => {
+                        return Err(NebulaError::from_msg(
+                            format!("Cannot get dependency name from {}", deps_str).as_str(),
+                            NbErrType::Parsing,
+                        ))
+                    }
                 };
                 // if exists, get packages version
                 match pkg_split.next() {
@@ -229,7 +231,13 @@ impl<'d> Debian<'d> {
                         let cmp_part = &cmp_part[1..].replace("<<", "<").replace(">>", ">");
                         let comp_op = match CompOp::from_sign(cmp_part) {
                             Ok(op) => op,
-                            Err(_) => return Err(NebulaError::DependencyParseError),
+                            Err(_) => {
+                                return Err(NebulaError::from_msg(
+                                    format!("Cannot get comparison operator from {}", cmp_part)
+                                        .as_str(),
+                                    NbErrType::Parsing,
+                                ))
+                            }
                         };
                         // remove the opening parenthesis from string
                         match pkg_split.next() {
@@ -237,7 +245,12 @@ impl<'d> Debian<'d> {
                                 dep_name,
                                 Some((comp_op, &ver[..ver.len() - 1])),
                             )?),
-                            None => return Err(NebulaError::DependencyParseError),
+                            None => {
+                                return Err(NebulaError::from_msg(
+                                    "Version not found after comparison operator",
+                                    NbErrType::Parsing,
+                                ))
+                            }
                         }
                     }
                     None => dependency_options.push(Dependency::from(dep_name, None)?),
@@ -259,9 +272,9 @@ impl<'d> Debian<'d> {
 }
 
 impl<'d> Repository for Debian<'d> {
-    fn initialize(&self) -> Result<(), NebulaError> {
+    fn initialize(&self) -> Result<(), Box<dyn Error>> {
         if !self.repo_dir.is_dir() {
-            fs::create_dir(&self.repo_dir).unwrap(); // create home/repo/debian
+            fs::create_dir(&self.repo_dir)?; // create home/repo/debian
         }
         Ok(())
     }
@@ -270,16 +283,11 @@ impl<'d> Repository for Debian<'d> {
         RepoType::Debian
     }
 
-    fn update(&self) -> Result<(), NebulaError> {
+    fn update(&self) -> Result<(), Box<dyn Error>> {
         // remove old files from debian/repo
         for entry in self.repo_dir.read_dir().expect("read_dir call failed") {
             if let Ok(entry) = entry {
-                if let Err(err) = fs::remove_file(entry.path()) {
-                    return Err(NebulaError::Fs(format!(
-                        "Cannot clean deb repo file: {}",
-                        err
-                    )));
-                }
+                fs::remove_file(entry.path())?;
             }
         }
 
@@ -287,7 +295,7 @@ impl<'d> Repository for Debian<'d> {
         utils::download(
             format!("{}/InRelease", self.conf.repository),
             &self.repo_dir.join("InRelease"),
-        );
+        )?;
 
         for component in &self.conf.components {
             info!("updating debian component {}...", component.to_str());
@@ -296,8 +304,7 @@ impl<'d> Repository for Debian<'d> {
                 &self.repo_dir.join("InRelease"),
                 &component.to_str(),
                 CONFIG.arch().to_str(),
-            )
-            .unwrap();
+            )?;
 
             // download package list for the component
             let pkgs_filename = self
@@ -311,13 +318,19 @@ impl<'d> Repository for Debian<'d> {
                     CONFIG.arch().to_str()
                 ),
                 &pkgs_filename,
-            );
+            )?;
 
             // compare expected and computed hash of the downloaded file
-            let real_hash = utils::fs::file2hash(Path::new(&pkgs_filename)).unwrap();
+            let real_hash = utils::fs::file2hash(Path::new(&pkgs_filename))?;
             if !real_hash.eq(&expected_hash) {
-                error!("Expected and real hash of {}", pkgs_filename.display());
-                return Err(NebulaError::IncorrectHash);
+                return Err(Box::new(NebulaError::from_msg(
+                    format!(
+                        "Incorrect hash. Expected: {}, real: {}",
+                        expected_hash, real_hash
+                    )
+                    .as_str(),
+                    NbErrType::HashCheck,
+                )));
             }
 
             // extract Packages.xz file in place
@@ -333,45 +346,13 @@ impl<'d> Repository for Debian<'d> {
     fn search(
         &self,
         queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, NebulaError> {
+    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
         let mut builder = GlobSetBuilder::new();
         for item in queries {
-            builder.add(match Glob::new(format!("Package: {}", item.0).as_str()) {
-                Ok(g) => g,
-                Err(e) => return Err(NebulaError::GlobError(e.to_string())),
-            });
+            builder.add(Glob::new(format!("Package: {}", item.0).as_str())?);
         }
-        let glob_set = match builder.build() {
-            Ok(g) => g,
-            Err(e) => return Err(NebulaError::GlobError(e.to_string())),
-        };
+        let glob_set = builder.build()?;
 
-        /*
-        // concatenate all package files (one for each component: main, contrib...)
-        let mut files_cat: Option<fs::File> = None;
-        for component in &self.conf.components {
-            let file = fs::File::open(format!(
-                "{}/Packages-{}",
-                self.repo_dir.display(),
-                component.to_str()
-            ))
-            .expect("Packages file for component not found");
-            if let Some(f) = &mut files_cat {
-                f.chain(file);
-            } else {
-                files_cat = Some(file);
-            }
-        }
-        let reader = match files_cat {
-            Some(r) => BufReader::new(r),
-            None => panic!("No package files for debian repo"),
-        };
-        // let lines: Result<Vec<String>, std::io::Error> = reader.lines().collect();
-        let lines: Vec<String> = match reader.lines().collect() {
-            Ok(s) => s,
-            Err(e) => panic!("Fatal: {}", e),
-        };
-        */
         let mut pkgs_list = vec![vec![]; queries.len()];
         let mut line_index = 0;
         while line_index < DEB_REPO_INDEX.len() {
@@ -396,7 +377,12 @@ impl<'d> Repository for Debian<'d> {
                                 version = Some(line[9..].to_string());
                                 v
                             }
-                            None => return Err(NebulaError::NotSupportedVersion),
+                            None => {
+                                return Err(Box::new(NebulaError::from_msg(
+                                    &line[9..],
+                                    NbErrType::VersionFmt,
+                                )))
+                            }
                         };
                         let mut i = 0;
                         while i < match_indx.len() {
@@ -435,7 +421,10 @@ impl<'d> Repository for Debian<'d> {
                             )?);
                         }
                     } else {
-                        return Err(NebulaError::VersionParsingError);
+                        return Err(Box::new(NebulaError::from_msg(
+                            "missing version for debian package",
+                            NbErrType::VersionNotFound,
+                        )));
                     }
                 }
             }

@@ -5,6 +5,7 @@ extern crate lazy_static;
 
 use simplelog::*;
 
+use std::error::Error;
 use std::fs::{create_dir, create_dir_all, File};
 
 pub mod config;
@@ -15,22 +16,21 @@ pub mod repos;
 pub mod utils;
 
 pub use config::constants::*;
-pub use errors::NebulaError;
 pub use pkg::{Dependency, DependsList, Package};
 pub use repos::{create_repos, RepoType, Repository};
 
 /// Checks if all nebula directories are present, if not, creates the needed directories. It also
 /// creates the needed files, such as the logger.
-pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), NebulaError> {
+pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), Box<dyn Error>> {
     // check nebula's home and cache directory (inside home directory)
     if !CONFIG.nebulahome().is_dir() {
-        create_dir_all(&CONFIG.nebulahome()).unwrap(); // create home
-        create_dir(&CONFIG.repos_dir()).unwrap(); // create home/repo
+        create_dir_all(&CONFIG.nebulahome())?; // create home
+        create_dir(&CONFIG.repos_dir())?; // create home/repo
     }
 
     // check fakeroot
     if !CONFIG.fakerootdir().is_dir() {
-        create_dir_all(&CONFIG.fakerootdir()).unwrap();
+        create_dir_all(&CONFIG.fakerootdir())?;
     }
 
     // check destdir, if it does not exists, fatal error: panic!
@@ -48,10 +48,9 @@ pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), NebulaError> {
         WriteLogger::new(
             LevelFilter::Debug,
             Config::default(),
-            File::create(&CONFIG.logfile()).unwrap(),
+            File::create(&CONFIG.logfile())?,
         ),
-    ])
-    .unwrap();
+    ])?;
 
     // initi all repos
     for repo in repos {
