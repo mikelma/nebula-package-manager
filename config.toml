@@ -14,5 +14,6 @@ destination-dir = "/home/mike/proiektuak/lfs/nebula/testdir"
     repository = "http://localhost:8080"
 
     [repositories.debian]
-    repository = "http://ftp.debian.org/debian/dists/unstable"
+    # repository = "http://ftp.debian.org/debian/dists/unstable"
+    repository = "http://deb.devuan.org/merged/dists/chimaera"
     components = ["main", "contrib"]
