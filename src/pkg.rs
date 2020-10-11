@@ -1,6 +1,5 @@
 use version_compare::{CompOp, Version};
 
-use std::error::Error;
 use std::fmt;
 
 use crate::{errors::*, RepoType};
@@ -77,19 +76,6 @@ impl Package {
 
 impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        /*
-        match &self.depends {
-            Some(d) => write!(
-                f,
-                "Name: {}, Version: {}\nDepends ({}): {}",
-                self.name,
-                self.version,
-                d.len(),
-                d
-            ),
-            None => write!(f, "Name: {}, Version: {}", self.name, self.version),
-        }
-        */
         write!(f, "{} {}", self.name, self.version)
     }
 }

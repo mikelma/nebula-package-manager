@@ -3,7 +3,7 @@ use version_compare::{CompOp, Version};
 use std::error::Error;
 use std::fmt;
 
-use crate::{errors::*, Package, CONFIG};
+use crate::{Package, CONFIG};
 
 pub mod debian;
 pub mod nebula;

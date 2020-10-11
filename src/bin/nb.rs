@@ -2,16 +2,11 @@
 extern crate clap;
 
 use clap::Arg;
-/*
-use cli_table::{
-    format::{self, CellFormat, Justify},
-    Cell, Row, Table,
-};
-*/
 use version_compare::{CompOp, Version};
 
 use std::io::{stdin, stdout, Write};
 use std::process::exit;
+use std::error::Error;
 
 use nbpm::{utils, Package, Repository};
 
@@ -55,13 +50,22 @@ fn main() {
         )
         .get_matches();
 
-    let repos = nbpm::repos::create_repos().unwrap();
-    nbpm::initialize(&repos).unwrap();
+    let repos = match nbpm::repos::create_repos() {
+        Ok(r) => r,
+        Err(e) => exit_with_err(e),
+    };
+
+    if let Err(e) = nbpm::initialize(&repos) {
+        exit_with_err(e);
+    }
 
     // extract package name and version comparison parameters if some, else return (None, None)
     let (pkg_name, pkg_comp) = match cli_args.value_of("PKG") {
         Some(v) => {
-            let (name, comp) = utils::parse_pkg_str_info(v).unwrap();
+            let (name, comp) = match utils::parse_pkg_str_info(v) {
+               Ok(v) => v,
+               Err(e) => exit_with_err(Box::new(e)),
+            };
             (Some(name), comp)
         }
         None => (None, None),
@@ -72,7 +76,9 @@ fn main() {
         println!("[*] Updating repositories... ");
         for repo in &repos {
             println!("      {}", repo.repo_type());
-            repo.update().unwrap();
+            if let Err(e) = repo.update() {
+               exit_with_err(e);
+            }
         }
         println!("done!");
     }
@@ -117,14 +123,16 @@ fn main() {
         println!("The following packages are going to be installed:");
         utils::cli::display_pkg_list(&to_install);
 
-        // ask the user for confirmation
+        // ask the user for confirmation before installing packages
         let mut line = String::new();
         print!(
             "Do you want to install {} {}? [N/y]",
             pkg.name(),
             pkg.version()
         );
-        stdout().flush().unwrap();
+        if let Err(e) = stdout().flush() {
+            exit_with_err(Box::new(e));
+        }
         let _n = stdin()
             .read_line(&mut line)
             .expect("Cannot read user input");
@@ -134,6 +142,11 @@ fn main() {
             exit(0);
         }
     }
+}
+
+fn exit_with_err(err: Box<dyn Error>) -> ! {
+    eprintln!("Error: {}", err);
+    exit(1);
 }
 
 fn search_pkg(

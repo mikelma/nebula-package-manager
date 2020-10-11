@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::exit;
 
 use crate::pkgdb::PkgDB;
-use crate::{errors::*, pkg, utils, Package, RepoType, Repository, CONFIG};
+use crate::{utils, Package, RepoType, Repository, CONFIG};
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct NebulaConfig {

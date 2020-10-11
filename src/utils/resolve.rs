@@ -1,6 +1,6 @@
 use crate::{
     errors::*,
-    pkg::{DependsItem, DependsList},
+    pkg::DependsItem,
     Package, Repository,
 };
 use petgraph::dot::{Config, Dot};

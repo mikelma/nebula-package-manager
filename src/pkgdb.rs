@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::Arch;
-use crate::pkg::{Dependency, DependsItem, DependsList, PkgSource};
+use crate::pkg::{Dependency, DependsList, PkgSource};
 use crate::{errors::*, utils, Package, RepoType};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -175,15 +175,10 @@ impl PkgDB {
         // init glob matchers from query names
         let mut builder = GlobSetBuilder::new();
         for item in queries {
-            builder.add(match Glob::new(item.0) {
-                Ok(g) => g,
-                Err(e) => return Err(Box::new(e)),
-            });
+            builder.add(Glob::new(item.0)?);
         }
-        let glob_set = match builder.build() {
-            Ok(g) => g,
-            Err(e) => return Err(Box::new(e)),
-        };
+        let glob_set = builder.build()?;
+
         let mut matches = vec![vec![]; queries.len()];
         for repo_component in [&self.core, &self.extra].iter() {
             // find for matches in the core repo (if available)

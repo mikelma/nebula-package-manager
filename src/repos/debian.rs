@@ -5,7 +5,7 @@ use version_compare::{CompOp, Version};
 
 use std::error::Error;
 use std::fs;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use crate::{
