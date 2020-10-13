@@ -7,6 +7,7 @@ use simplelog::*;
 
 use std::error::Error;
 use std::fs::{create_dir, create_dir_all, File};
+use std::process::exit;
 
 pub mod config;
 pub mod errors;
@@ -58,4 +59,9 @@ pub fn initialize(repos: &Vec<Box<dyn Repository>>) -> Result<(), Box<dyn Error>
     }
 
     Ok(())
+}
+
+pub fn exit_with_err(err: Box<dyn Error>) -> ! {
+    eprintln!("Error: {}", err);
+    exit(1);
 }

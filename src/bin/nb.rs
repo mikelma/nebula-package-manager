@@ -6,9 +6,9 @@ use version_compare::{CompOp, Version};
 
 use std::io::{stdin, stdout, Write};
 use std::process::exit;
-use std::error::Error;
+// use std::error::Error;
 
-use nbpm::{utils, Package, Repository};
+use nbpm::{utils, Package, Repository, exit_with_err};
 
 fn main() {
     let cli_args = app_from_crate!()
@@ -142,11 +142,6 @@ fn main() {
             exit(0);
         }
     }
-}
-
-fn exit_with_err(err: Box<dyn Error>) -> ! {
-    eprintln!("Error: {}", err);
-    exit(1);
 }
 
 fn search_pkg(
