@@ -20,6 +20,8 @@ pub enum NbErrType {
     DependencyCicle,
     // command
     Cmd,
+    // File system errors
+    CannotRemoveBadLinks,
 }
 
 impl fmt::Display for NbErrType {
@@ -35,6 +37,7 @@ impl fmt::Display for NbErrType {
             NbErrType::DependencyNotFound => write!(f, "Dependency not found"),
             NbErrType::DependencyCicle => write!(f, "Dependency cycle found"),
             NbErrType::Cmd => write!(f, "Command error"),
+            NbErrType::CannotRemoveBadLinks => write!(f, "Cannot remove bad links, links have to be manually removed"),
         }
     }
 }

@@ -7,6 +7,8 @@ use std::io::Read;
 use std::os::unix;
 use std::path::{Path, PathBuf};
 
+use crate::errors::*;
+
 pub fn create_links(src: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
     // get absolute form of paths
     let src = fs::canonicalize(src)?;
@@ -43,9 +45,9 @@ pub fn create_links(src: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
                             new_path.display()
                         );
                         info!("Cleaning created symlinks");
-                        eprintln!("[!] An error occurred while creating the links");
-                        let mut exit_ok = true;
-                        // An error occurred, destoy every link created until now
+                        //eprintln!("[!] An error occurred while creating the links");
+                        let mut exit_ok = true; // true if all created links until now are removed
+                                                // An error occurred, destoy every link created until now
                         links.iter().for_each(|l| {
                             // if the link can not be removed, notify the user and continue
                             // removing other links
@@ -54,14 +56,19 @@ pub fn create_links(src: &Path, dest: &Path) -> Result<(), Box<dyn Error>> {
                                 exit_ok = false;
                             }
                         });
+
                         if exit_ok {
-                            eprintln!("[!] Exiting successfully...");
+                            // eprintln!("[!] Exiting successfully...");
                             info!("Links cleaned successfully");
+                            return Err(Box::new(e));
                         } else {
                             eprintln!("[!] Fatal: Could not create links successfully and some links could not be cleaned...");
                             warn!("Could not create links successfully and some links could not be cleaned");
+                            return Err(Box::new(NebulaError::from_msg(
+                                e.to_string().as_str(),
+                                NbErrType::CannotRemoveBadLinks,
+                            )));
                         }
-                        std::process::exit(1);
                     }
                 }
             }
