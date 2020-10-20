@@ -1,3 +1,4 @@
+use serde_derive::{Deserialize, Serialize};
 use version_compare::{CompOp, Version};
 
 use std::error::Error;
@@ -7,6 +8,7 @@ use crate::{Package, CONFIG};
 
 pub mod debian;
 pub mod nebula;
+pub mod rosetta;
 
 pub use debian::{DebConfig, Debian};
 pub use nebula::{NebulaConfig, RepoNebula};
@@ -29,10 +31,13 @@ pub trait Repository {
     */
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum RepoType {
-    Debian,
+    #[serde(rename(deserialize = "nebula"))]
     Nebula,
+    #[serde(rename(deserialize = "debian"))]
+    Debian,
 }
 
 impl Default for RepoType {
