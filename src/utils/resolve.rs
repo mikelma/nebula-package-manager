@@ -1,16 +1,12 @@
-use crate::{
-    errors::*,
-    pkg::DependsItem,
-    Package, Repository,
-};
 use petgraph::dot::{Config, Dot};
 use petgraph::{graph::NodeIndex, Graph};
-// use std::cell::RefCell;
-// use version_compare::Version;
+
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+
+use crate::{errors::*, pkg::DependsItem, repos::Query, Package, Repository};
 
 pub fn resolve_dependencies(
     repos: &Vec<Box<dyn Repository>>,
@@ -37,7 +33,7 @@ pub fn resolve_dependencies(
             break;
         }
         // prepare queries
-        let mut queries = vec![];
+        let mut queries: Vec<Query> = vec![];
         // an entry for each query. The item in the i-th position contains the node index
         // and the index of the dependency inside the dependencies list of the node the query
         // belongs to.
@@ -56,7 +52,7 @@ pub fn resolve_dependencies(
                             edges.push((*node, pkg_index));
                         } else {
                             query_to_dep_map.push((*node, i_dep));
-                            queries.push((d.name(), d.version_comp()));
+                            queries.push((d.name(), d.version_req().clone()));
                         }
                     }
                     DependsItem::Opts(d_list) => {
@@ -69,18 +65,13 @@ pub fn resolve_dependencies(
                                 break;
                             } else {
                                 query_to_dep_map.push((*node, i_dep));
-                                queries.push((d.name(), d.version_comp()));
+                                queries.push((d.name(), d.version_req().clone()));
                             }
                         }
                     }
                 }
             }
         }
-        // println!(
-        //     "-------------------- {} --------------------",
-        //     queries.len()
-        // );
-
         // get matches from queries searching for the queries in all repos
         let mut matches = vec![vec![]; queries.len()];
         for repo in repos {
@@ -93,14 +84,6 @@ pub fn resolve_dependencies(
         let mut resolved: HashMap<NodeIndex, Vec<DependsItem>> = HashMap::new();
         let mut new_unresolved_deps: HashMap<NodeIndex, Vec<DependsItem>> = HashMap::new();
         for (matches, (node, dep_index)) in matches.iter().zip(query_to_dep_map.iter()) {
-            // println!(
-            //     "Package, {}, dependency {}, mathes:",
-            //     deps_graph[*node].name(),
-            //     unresolved_deps[node][*dep_index],
-            // );
-            // matches.iter().for_each(|m| println!("      {}", m.name()));
-            // println!();
-
             // check if the dependency was already resolved in a previous iter of this for
             if let Some(list) = resolved.get(node) {
                 if list
@@ -108,12 +91,10 @@ pub fn resolve_dependencies(
                     .find(|d| **d == unresolved_deps[node][*dep_index])
                     .is_some()
                 {
-                    // println!("  * Dependency already satisfied!");
                     continue;
                 }
             }
             if matches.is_empty() {
-                // println!("  * No matches for the query");
                 continue;
             } else {
                 // add the resolved dependency's package to the dependency graph
@@ -130,31 +111,22 @@ pub fn resolve_dependencies(
                 if let Some(new_deps) = matches[0].depends() {
                     new_unresolved_deps.insert(node_i, new_deps.inner().clone());
                 }
-                // println!(
-                //     "  * Dependency {} resolved!",
-                //     unresolved_deps[node][*dep_index]
-                // );
             }
         }
         unresolved_deps = new_unresolved_deps;
-        // panic!();
     }
-    // println!("\nedges: {:?}", edges);
     deps_graph.extend_with_edges(&edges);
     if let Some(file_name) = save_graph {
         let mut file = match File::create(file_name) {
             Ok(f) => f,
             Err(e) => return Err(Box::new(e)),
         };
-        // println!("{}", Dot::with_config(&deps_graph, &[Config::EdgeNoLabel]));
         if let Err(e) = file.write_all(
             format!("{}", Dot::with_config(&deps_graph, &[Config::EdgeNoLabel])).as_bytes(),
         ) {
             return Err(Box::new(e));
         }
     }
-
-    // let mut space = DfsSpace::new(deps_graph);
 
     let sorted = match petgraph::algo::toposort(&deps_graph, None) {
         Ok(s) => s,
@@ -169,4 +141,3 @@ pub fn resolve_dependencies(
     sorted.iter().for_each(|i| res.push(deps_graph[*i].clone()));
     Ok(res)
 }
-

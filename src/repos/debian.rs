@@ -1,13 +1,14 @@
 // use regex::Regex;
 use globset::{Glob, GlobSetBuilder};
+use semver::{Version, VersionReq};
 use serde_derive::Deserialize;
-use version_compare::{CompOp, Version};
 
 use std::error::Error;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use super::Query;
 use crate::{
     errors::*, pkg, utils, Dependency, DependsList, Package, RepoType, Repository, CONFIG,
 };
@@ -207,7 +208,7 @@ impl<'d> Debian<'d> {
         )))
     }
 
-    fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, NebulaError> {
+    fn parse_dependecies_str(deps_str: &str) -> Result<Option<DependsList>, Box<dyn Error>> {
         let deps_split: Vec<&str> = deps_str.split(", ").collect();
         let mut dependencies_list = DependsList::new();
         for dep_str in deps_split {
@@ -219,16 +220,21 @@ impl<'d> Debian<'d> {
                 let dep_name = match pkg_split.next() {
                     Some(name) => name,
                     None => {
-                        return Err(NebulaError::from_msg(
+                        return Err(Box::new(NebulaError::from_msg(
                             format!("Cannot get dependency name from {}", deps_str).as_str(),
                             NbErrType::Parsing,
-                        ))
+                        )))
                     }
                 };
                 // if exists, get packages version
                 match pkg_split.next() {
                     Some(cmp_part) => {
+                        // replace possible << and >> comp. op. with < and > for compatibility with
+                        // the semver crate (and remove openeing parenthesis)
                         let cmp_part = &cmp_part[1..].replace("<<", "<").replace(">>", ">");
+                        let req = VersionReq::parse(&cmp_part[..cmp_part.len() - 1])?;
+                        dependency_options.push(Dependency::from(dep_name, req));
+                        /*
                         let comp_op = match CompOp::from_sign(cmp_part) {
                             Ok(op) => op,
                             Err(_) => {
@@ -239,7 +245,6 @@ impl<'d> Debian<'d> {
                                 ))
                             }
                         };
-                        // remove the opening parenthesis from string
                         match pkg_split.next() {
                             Some(ver) => dependency_options.push(Dependency::from(
                                 dep_name,
@@ -252,8 +257,9 @@ impl<'d> Debian<'d> {
                                 ))
                             }
                         }
+                        */
                     }
-                    None => dependency_options.push(Dependency::from(dep_name, None)?),
+                    None => dependency_options.push(Dependency::from(dep_name, VersionReq::any())),
                 }
             }
             // add dependency options to dependency list
@@ -343,10 +349,7 @@ impl<'d> Repository for Debian<'d> {
         Ok(())
     }
 
-    fn search(
-        &self,
-        queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
+    fn search(&self, queries: &[Query]) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
         let mut builder = GlobSetBuilder::new();
         for item in queries {
             builder.add(Glob::new(format!("Package: {}", item.0).as_str())?);
@@ -372,28 +375,16 @@ impl<'d> Repository for Debian<'d> {
                         break; // reached end of package info
                     }
                     if line.contains("Version: ") {
-                        let capt_ver = match Version::from(&line[9..]) {
-                            Some(v) => {
-                                version = Some(line[9..].to_string());
-                                v
-                            }
-                            None => {
-                                return Err(Box::new(NebulaError::from_msg(
-                                    &line[9..],
-                                    NbErrType::VersionFmt,
-                                )))
-                            }
-                        };
+                        let ver = Version::parse(&line[9..])?;
                         let mut i = 0;
                         while i < match_indx.len() {
-                            if let Some((comp_op, comp_ver)) = &queries[match_indx[i]].1 {
-                                if !capt_ver.compare_to(&comp_ver, &comp_op) {
-                                    // if version req. is not satisfied
-                                    match_indx.remove(i); // remove match from match indexes list
-                                }
+                            if queries[match_indx[i]].1.matches(&ver) {
+                                // if version req. is not satisfied
+                                match_indx.remove(i); // remove match from match indexes list
                             }
                             i += 1;
                         }
+                        version = Some(ver);
                     } else if line.contains("Filename: ") {
                         source = Some(pkg::PkgSource::from(
                             RepoType::Debian,
@@ -407,7 +398,7 @@ impl<'d> Repository for Debian<'d> {
                 // all info about the matched package has been read and parsed
                 // check if the package still staisfies a a query
                 if !match_indx.is_empty() {
-                    if let Some(v) = version {
+                    if let Some(ver) = version {
                         let source = match source {
                             Some(s) => s,
                             None => pkg::PkgSource::from(RepoType::Debian, None),
@@ -415,10 +406,10 @@ impl<'d> Repository for Debian<'d> {
                         for mat_i in match_indx {
                             pkgs_list[mat_i].push(Package::new(
                                 &name,
-                                &v,
+                                ver.clone(),
                                 source.clone(),
                                 depends.clone(),
-                            )?);
+                            ));
                         }
                     } else {
                         return Err(Box::new(NebulaError::from_msg(

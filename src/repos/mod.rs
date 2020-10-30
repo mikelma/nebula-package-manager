@@ -1,5 +1,5 @@
+use semver::VersionReq;
 use serde_derive::{Deserialize, Serialize};
-use version_compare::{CompOp, Version};
 
 use std::error::Error;
 use std::fmt;
@@ -13,14 +13,13 @@ pub mod rosetta;
 pub use debian::{DebConfig, Debian};
 pub use nebula::{NebulaConfig, RepoNebula};
 
+pub type Query<'a> = (&'a str, VersionReq);
+
 pub trait Repository {
     fn initialize(&self) -> Result<(), Box<dyn Error>>;
     fn repo_type(&self) -> RepoType;
     fn update(&self) -> Result<(), Box<dyn Error>>;
-    fn search(
-        &self,
-        queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>>;
+    fn search(&self, queries: &[Query]) -> Result<Vec<Vec<Package>>, Box<dyn Error>>;
     /*
     fn install(packages: &[Package]) -> Result<(), NebulaError> {
         for pkg in packages {
@@ -31,8 +30,7 @@ pub trait Repository {
     */
 }
 
-#[derive(Deserialize, Serialize)]
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone, Eq, Hash)]
 pub enum RepoType {
     #[serde(rename(deserialize = "nebula"))]
     Nebula,

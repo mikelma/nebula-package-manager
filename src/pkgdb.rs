@@ -1,6 +1,7 @@
 use globset::{Glob, GlobSetBuilder};
 use serde_derive::{Deserialize, Serialize};
-use version_compare::{CompOp, Version};
+// use version_compare::{CompOp, Version};
+use semver::Version;
 
 use std::error::Error;
 use std::fs;
@@ -8,7 +9,7 @@ use std::path::Path;
 
 use crate::config::Arch;
 use crate::pkg::{Dependency, DependsList, PkgSource};
-use crate::{errors::*, utils, Package, RepoType};
+use crate::{errors::*, repos::Query, utils, Package, RepoType};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Component {
@@ -29,39 +30,38 @@ struct PkgInfo {
 }
 
 impl PkgInfo {
-    pub fn to_package(&self) -> Result<Package, NebulaError> {
-        Package::new(
+    pub fn to_package(&self) -> Result<Package, Box<dyn Error>> {
+        Ok(Package::new(
             &self.name,
-            &self.version,
+            Version::parse(&self.version)?,
             PkgSource::from(RepoType::Nebula, self.source.as_deref()),
             match &self.depends {
                 Some(l) => PkgInfo::deps_str_to_depitems(l)?,
                 None => None,
             },
-        )
+        ))
     }
 
-    fn deps_str_to_depitems(deps_str: &Vec<String>) -> Result<Option<DependsList>, NebulaError> {
+    fn deps_str_to_depitems(deps_str: &Vec<String>) -> Result<Option<DependsList>, Box<dyn Error>> {
         let mut dep_list = DependsList::new();
         for dep_str in deps_str {
             if dep_str.is_empty() {
-                return Err(NebulaError::from_msg(
+                return Err(Box::new(NebulaError::from_msg(
                     "Empty dependency while converting string to dependency",
                     NbErrType::Parsing,
-                ));
+                )));
             }
             let or_split: Vec<&str> = dep_str.split(" or ").collect();
             let mut opts = vec![];
             for item in or_split {
-                let (name, ver_comp) = utils::parse_pkg_str_info(item)?;
-                let dep = Dependency::from(name, ver_comp)?;
-                opts.push(dep);
+                let (name, mut ver_comp) = utils::parse_pkg_str_info(item)?;
+                opts.push(Dependency::from(name, ver_comp));
             }
             if opts.is_empty() {
-                return Err(NebulaError::from_msg(
+                return Err(Box::new(NebulaError::from_msg(
                     "Optional deps. empty while converting string to dependecies",
                     NbErrType::Parsing,
-                ));
+                )));
             } else if opts.len() == 1 {
                 // push single dependecy
                 dep_list.push(opts.pop().unwrap());
@@ -106,7 +106,7 @@ impl PkgDB {
                     let core = match c.core_info() {
                         Some(list) => Some(list.iter().map(|d| d.to_package()).collect::<Result<
                             Vec<Package>,
-                            NebulaError,
+                            Box<dyn Error>,
                         >>(
                         )?),
                         None => None,
@@ -114,7 +114,7 @@ impl PkgDB {
                     let extra = match c.extra_info() {
                         Some(list) => Some(list.iter().map(|d| d.to_package()).collect::<Result<
                             Vec<Package>,
-                            NebulaError,
+                            Box<dyn Error>,
                         >>(
                         )?),
                         None => None,
@@ -168,10 +168,7 @@ impl PkgDB {
         self.components = Some(comps);
     }
 
-    pub fn search(
-        &self,
-        queries: &[(&str, Option<(CompOp, Version)>)],
-    ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
+    pub fn search(&self, queries: &[Query]) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
         // init glob matchers from query names
         let mut builder = GlobSetBuilder::new();
         for item in queries {
@@ -189,11 +186,17 @@ impl PkgDB {
                     if !m_indexes.is_empty() {
                         let mut i = 0;
                         while i < m_indexes.len() {
+                            /*
                             if let Some((comp_op, comp_ver)) = &queries[m_indexes[i]].1 {
                                 if !pkgs[i].version().compare_to(&comp_ver, &comp_op) {
                                     // if version req. is not satisfied
                                     m_indexes.remove(i); // remove match from match indexes list
                                 }
+                            }
+                            */
+                            if !queries[m_indexes[i]].1.matches(pkgs[i].version()) {
+                                // if version req. is not satisfied
+                                m_indexes.remove(i); // remove match from match indexes list
                             }
                             i += 1;
                         }
@@ -221,6 +224,7 @@ fn set_default_components() -> Option<Vec<Component>> {
 }
 
 // FOR DEBUGGING ONLY
+/*
 #[cfg(test)]
 mod test {
     use super::PkgDB;
@@ -246,3 +250,4 @@ mod test {
         assert_eq!(1, res[2].len());
     }
 }
+*/

@@ -2,8 +2,17 @@ use serde_derive::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
+use std::path::Path;
 
-use crate::RepoType;
+use crate::{RepoType, CONFIG, exit_with_err};
+
+lazy_static! {
+    pub static ref ROSETTA: Rosetta = match Rosetta::from(CONFIG.rosetta_path()) {
+        Ok(r) => r,
+        Err(e) => exit_with_err(e),
+    };
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PkgNames {
@@ -39,10 +48,18 @@ impl Rosetta {
             data: HashMap::new(),
         }
     }
+    pub fn from(path: &Path) -> Result<Rosetta, Box<dyn Error>> {
+        let file_str = fs::read_to_string(path)?;
+        Ok(toml::from_str(&file_str)?)
+    }
+
     pub fn push(&mut self, nb_name: &str, other_names: PkgNames) {
         self.data.insert(nb_name.to_string(), other_names);
     }
     pub fn name_resolve(&self, name: &str, from: &RepoType, to: &RepoType) -> Option<Vec<String>> {
+        if from == to {
+            return None;
+        }
         match from {
             RepoType::Nebula => Some(self.data.get(name)?.get(to)?.to_vec()),
             RepoType::Debian => {
@@ -91,7 +108,6 @@ debian = ["egg", "foo-dev"]
 
         println!("{}", rosetta_str);
         println!("{}", ser);
-        // assert_eq!(rosetta_str, ser)
     }
 
     #[test]

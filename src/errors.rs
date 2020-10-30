@@ -12,9 +12,10 @@ pub enum NbErrType {
     // package
     PackageNotFound,
     // version
-    VersionComp,
+    // VersionComp,
     VersionFmt,
     VersionNotFound,
+    BadCompOp,
     // dependecy
     DependencyNotFound,
     DependencyCicle,
@@ -31,13 +32,17 @@ impl fmt::Display for NbErrType {
             NbErrType::HashCheck => write!(f, "Hash check error"),
             NbErrType::PackageNotFound => write!(f, "Package not found"),
             NbErrType::Parsing => write!(f, "Error while parsing"),
-            NbErrType::VersionComp => write!(f, "Verision comparison error"),
+            // NbErrType::VersionComp => write!(f, "Verision comparison error"),
             NbErrType::VersionFmt => write!(f, "Incompatible version format"),
             NbErrType::VersionNotFound => write!(f, "Version not found"),
+            NbErrType::BadCompOp => write!(f, "Incorrect or bad comparison operator"),
             NbErrType::DependencyNotFound => write!(f, "Dependency not found"),
             NbErrType::DependencyCicle => write!(f, "Dependency cycle found"),
             NbErrType::Cmd => write!(f, "Command error"),
-            NbErrType::CannotRemoveBadLinks => write!(f, "Cannot remove bad links, links have to be manually removed"),
+            NbErrType::CannotRemoveBadLinks => write!(
+                f,
+                "Cannot remove bad links, links have to be manually removed"
+            ),
         }
     }
 }

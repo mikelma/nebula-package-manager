@@ -78,6 +78,8 @@ pub struct Configuration {
     pkgignore: Option<PathBuf>,
     #[serde(skip, default = "set_defaults_empty")]
     logfile: Option<PathBuf>,
+    #[serde(rename = "rosetta", skip, default = "set_defaults_empty")]
+    rosetta_path: Option<PathBuf>,
 }
 
 impl Configuration {
@@ -102,6 +104,7 @@ impl Configuration {
         self.repos_dir = Some(self.nebulahome.join("repos"));
         self.pkgignore = Some(self.nebulahome.join("pkgignore"));
         self.logfile = Some(self.nebulahome.join("nebula.log"));
+        self.rosetta_path = Some(self.nebulahome.join("rosetta.toml"));
     }
 
     pub fn fakerootdir(&self) -> &Path {
@@ -127,31 +130,35 @@ impl Configuration {
     pub fn repos_dir(&self) -> &Path {
         match &self.repos_dir {
             Some(d) => d.as_path(),
-            None => panic!(
-                "Default field `repos_dir` empty in Configuration. \
-                Configuration objects must be contructed with Configuration::from"
-            ),
+            None => panic!(Self::panic_err_message("repos_dir")),
+        }
+    }
+    
+    pub fn rosetta_path(&self) -> &Path {
+        match &self.rosetta_path {
+            Some(p) => p.as_path(),
+            None => panic!(Self::panic_err_message("rosetta_path")),
         }
     }
 
     pub fn pkgignore(&self) -> &Path {
         match &self.pkgignore {
             Some(d) => d.as_path(),
-            None => panic!(
-                "Default field `pkgignore` empty in Configuration. \
-                Configuration objects must be contructed with Configuration::from"
-            ),
+            None => panic!(Self::panic_err_message("pkgignore")),
         }
     }
 
     pub fn logfile(&self) -> &Path {
         match &self.logfile {
             Some(d) => d.as_path(),
-            None => panic!(
-                "Default field `logfile` empty in Configuration. \
-                Configuration objects must be contructed with Configuration::from"
-            ),
+            None => panic!(Self::panic_err_message("logfile")),
         }
+    }
+    
+    fn panic_err_message(field_name: &str) -> String {
+        format!("Default field `{}` empty in Configuration. \
+            Configuration objects must be contructed with Configuration::from", field_name)
+        
     }
 }
 

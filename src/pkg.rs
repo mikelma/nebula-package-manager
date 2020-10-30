@@ -1,15 +1,32 @@
-use version_compare::{CompOp, Version};
+use semver::{Version, VersionReq};
 
+use std::cmp::Ordering;
 use std::fmt;
+use std::str::FromStr;
 
 use crate::{errors::*, RepoType};
+
+#[derive(Debug, Clone)]
+struct VersionWrapper(Version);
+
+impl VersionWrapper {
+    pub fn inner(&self) -> &Version {
+        &self.0
+    }
+}
+
+impl Default for VersionWrapper {
+    fn default() -> Self {
+        VersionWrapper(Version::new(0, 0, 0))
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Package {
     /// The name of the package (no version included)
     name: String,
     /// Version of the package
-    version: String,
+    version: VersionWrapper,
     /// Source of the package
     source: PkgSource,
     /// The dependency list of the package. If it has no depenedencies, this field is None.
@@ -19,32 +36,24 @@ pub struct Package {
 impl Package {
     pub fn new(
         name: &str,
-        version: &str,
+        version: Version,
         source: PkgSource,
         depends: Option<DependsList>,
-    ) -> Result<Package, NebulaError> {
-        // check if the provided version has a compatible format with `version_compare`
-        if Version::from(&version).is_none() {
-            return Err(NebulaError::from_msg(version, NbErrType::VersionFmt));
-        }
-
-        Ok(Package {
+    ) -> Package {
+        Package {
             name: name.to_string(),
-            version: version.to_string(),
+            version: VersionWrapper(version),
             source,
             depends,
-        })
+        }
     }
 
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn version(&self) -> Version {
-        match Version::from(&self.version) {
-            Some(v) => v,
-            None => unreachable!(),
-        }
+    pub fn version(&self) -> &Version {
+        self.version.inner()
     }
 
     pub fn source(&self) -> &PkgSource {
@@ -64,6 +73,7 @@ impl Package {
 
     /// Returns true if the `Package` satisfies the given `Dependency`.
     pub fn satisfies(&self, dep: &Dependency) -> bool {
+        /*
         if let Some((dep_comp_op, dep_ver)) = dep.version_comp() {
             // the dependency contains specific version and compare oprerator
             return self.name.eq(dep.name()) && self.version().compare_to(&dep_ver, &dep_comp_op);
@@ -71,53 +81,70 @@ impl Package {
         // the dependency does not contain any version and comparison operator, thus the dependency
         // is satisfied if the name of the package and the name of the dependency are equal.
         self.name.eq(dep.name())
+        */
+        self.name.eq(dep.name()) && dep.version_req().matches(self.version.inner())
     }
 }
 
 impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.name, self.version)
+        write!(f, "{} {}", self.name, self.version.inner())
     }
 }
 
 impl PartialEq for Package {
     fn eq(&self, other: &Self) -> bool {
         // two packages are considered equal if their names and versions are equal
-        let ver_pkg = self.version();
-        let ver_other = other.version();
-        self.name.eq(other.name()) && ver_pkg.compare(&ver_other) == CompOp::Eq
+        self.name.eq(other.name()) && *self.version.inner() == *other.version()
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CompOp {
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
+}
+
+impl FromStr for CompOp {
+    type Err = NebulaError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "<" | "<<" => Ok(Self::Lt),
+            "<=" => Ok(Self::Le),
+            "=" | "==" => Ok(Self::Eq),
+            ">=" => Ok(Self::Ge),
+            ">" | ">>" => Ok(Self::Gt),
+            _ => Err(NebulaError::from_msg(s, NbErrType::BadCompOp)),
+        }
     }
 }
 
 /// Contains a package dependency. The name of the package, comparison operator and version are required.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Dependency(String, Option<(CompOp, String)>);
+pub struct Dependency(String, VersionReq);
 
 impl Dependency {
     /// Creates a new `Dependency` given the name and version requirement.
-    pub fn from(name: &str, comp_op: Option<(CompOp, &str)>) -> Result<Dependency, NebulaError> {
-        if let Some((comp, ver)) = comp_op {
-            // check if the provided string as version is supported or correctly formatted
-            if Version::from(ver).is_none() {
-                return Err(NebulaError::from_msg(ver, NbErrType::VersionFmt));
-            }
-            Ok(Dependency(name.to_string(), Some((comp, ver.to_string()))))
-        } else {
-            Ok(Dependency(name.to_string(), None))
-        }
+    pub fn from(name: &str, vercomp: VersionReq) -> Dependency {
+        Dependency(name.to_string(), vercomp)
     }
 
     pub fn name(&self) -> &str {
         &self.0
     }
 
-    pub fn comp_op(&self) -> Option<&CompOp> {
-        match &self.1 {
-            Some((c, _)) => Some(c),
-            None => None,
+    pub fn comp_op(&self) -> CompOp {
+        match CompOp::from_str(&self.1.to_string()) {
+            Ok(c) => c,
+            Err(e) => panic!(e),
         }
     }
 
+    /*
     pub fn version(&self) -> Option<Version> {
         match &self.1 {
             Some((_, vs)) => match Version::from(vs) {
@@ -140,8 +167,14 @@ impl Dependency {
             None
         }
     }
+    */
+    pub fn version_req(&self) -> &VersionReq {
+        &self.1
+    }
 
+    /// Returns true if the `Dependecy` satisfies the given `Dependency`.
     pub fn satisfies(&self, dep: &Dependency) -> bool {
+        /*
         match (self.version_comp(), dep.version_comp()) {
             // compare both dependecy versions and take into account comparison operators
             (Some((_, my_ver)), Some((other_comp, other_ver))) => {
@@ -153,15 +186,35 @@ impl Dependency {
             // compare only dependency names if the given dependency has no version requirements
             (_, None) => self.0 == dep.name(),
         }
+        */
+        // compare names
+        if self.0 != dep.name() {
+            return false;
+        }
+        // compare comparison operators
+        let c = dep.comp_op();
+        if self.comp_op() != c {
+            return false;
+        }
+
+        // check if self's version satisfies dep's requirement
+        match self.1.cmp(dep.version_req()) {
+            Ordering::Less => c == CompOp::Lt,
+            Ordering::Equal => (c == CompOp::Le) || (c == CompOp::Eq) || (c == CompOp::Ge),
+            Ordering::Greater => c == CompOp::Ge,
+        }
     }
 }
 
 impl fmt::Display for Dependency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        /*
         match &self.1 {
             Some((op, v)) => write!(f, "{} {:?} {}", self.0, op, v),
             None => write!(f, "{}", self.0),
         }
+        */
+        write!(f, "{} ({})", self.0, self.1.to_string())
     }
 }
 
@@ -194,7 +247,7 @@ impl fmt::Display for DependsItem {
 }
 
 /// Defines all the dependencies a package might depend on.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct DependsList(Vec<DependsItem>);
 
 impl DependsList {

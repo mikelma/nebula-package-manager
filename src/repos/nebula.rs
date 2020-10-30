@@ -1,5 +1,5 @@
 use serde_derive::Deserialize;
-use version_compare::{CompOp, Version};
+// use semver::{VersionReq, Version};
 
 use std::error::Error;
 use std::fs;
@@ -9,6 +9,7 @@ use std::process::exit;
 
 use crate::pkgdb::PkgDB;
 use crate::{utils, Package, RepoType, Repository, CONFIG};
+use super::Query;
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct NebulaConfig {
@@ -91,7 +92,7 @@ impl<'d> Repository for RepoNebula<'d> {
 
     fn search(
         &self,
-        queries: &[(&str, Option<(CompOp, Version)>)],
+        queries: &[Query],
     ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
         NB_REPO_INDEX.search(&queries)
     }

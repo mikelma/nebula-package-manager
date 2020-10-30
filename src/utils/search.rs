@@ -1,11 +1,9 @@
-use crate::{errors::*, Package, RepoType, Repository};
-use version_compare::{CompOp, Version};
-
+use crate::{errors::*, repos::Query, Package, RepoType, Repository};
 use std::error::Error;
 
 pub fn search(
-    queries: &[(&str, Option<(CompOp, Version)>)],
-    repos: &Vec<impl Repository>,
+    queries: &[Query],
+    repos: &Vec<Box<dyn Repository>>,
     repo_sel: Option<RepoType>,
 ) -> Result<Vec<Vec<Package>>, Box<dyn Error>> {
     let mut matches = vec![vec![]; queries.len()];

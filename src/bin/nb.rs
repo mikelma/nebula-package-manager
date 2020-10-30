@@ -2,13 +2,13 @@
 extern crate clap;
 
 use clap::Arg;
-use version_compare::{CompOp, Version};
+// use version_compare::{CompOp, Version};
 
 use std::io::{stdin, stdout, Write};
 use std::process::exit;
 // use std::error::Error;
 
-use nbpm::{utils, Package, Repository, exit_with_err};
+use nbpm::{exit_with_err, utils, Package, Repository};
 
 fn main() {
     let cli_args = app_from_crate!()
@@ -60,15 +60,32 @@ fn main() {
     }
 
     // extract package name and version comparison parameters if some, else return (None, None)
-    let (pkg_name, pkg_comp) = match cli_args.value_of("PKG") {
+    let pkg_info = match cli_args.value_of("PKG") {
         Some(v) => {
             let (name, comp) = match utils::parse_pkg_str_info(v) {
-               Ok(v) => v,
-               Err(e) => exit_with_err(Box::new(e)),
+                Ok(v) => v,
+                Err(e) => exit_with_err(e),
             };
-            (Some(name), comp)
+            Some((name, comp))
         }
-        None => (None, None),
+        None => None,
+    };
+
+    let search_single_pkg = || {
+        let (name, v_req) = pkg_info.unwrap();
+        match utils::search::search(&[(name, v_req)], &repos, None) {
+            Ok(mut matches) => {
+                // as we made a single query, the matches vector only contains a single vector with
+                // the query matches
+                if matches[0].is_empty() {
+                    println!("No matches found");
+                    exit(0);
+                } else {
+                    matches.pop().unwrap()
+                }
+            }
+            Err(e) => exit_with_err(e),
+        }
     };
 
     // update repositories
@@ -77,26 +94,46 @@ fn main() {
         for repo in &repos {
             println!("      {}", repo.repo_type());
             if let Err(e) = repo.update() {
-               exit_with_err(e);
+                exit_with_err(e);
             }
         }
         println!("done!");
-    }
-
+    } else
     // search for a package
     if cli_args.is_present("search") {
-        match search_pkg(&repos, (pkg_name.unwrap(), &pkg_comp)) {
-            Some(matches) => utils::cli::display_pkg_list(&matches),
-            None => println!("No packages found"),
+        /*
+        let (name, v_req) = pkg_info.unwrap();
+        match utils::search::search(&[(name, v_req)], &repos, None) {
+            Ok(matches) => {
+                // as we made a single query, the matches vector only contains a single vector with
+                // the query matches
+                if matches[0].is_empty() {
+                    println!("No matches found");
+                } else {
+                    utils::cli::display_pkg_list(&matches[0])
+                }
+            }
+            Err(e) => exit_with_err(e),
         }
-    }
-
+        */
+        let m = search_single_pkg();
+        utils::cli::display_pkg_list(&m);
+    // utils::search::search(&[(pkg_name.unwrap(), pkg_comp)], &repos, None).unwrap();
+    } else
     // install a package
     if cli_args.is_present("install") {
-        let matches = match search_pkg(&repos, (pkg_name.unwrap(), &pkg_comp)) {
+        /*
+        let (pkg_name, pkg_req) = match pkg_info {
+            Some((name, req)) => (name, req),
+            None => unreachable!(),
+        };
+        let (pkg_name, pkg_v_req) = pkg_info.unwrap();
+        let matches = match search_pkg(&repos, (pkg_name, pkg_v_req)) {
             Some(m) => m,
             None => exit(0),
         };
+        */
+        let matches = search_single_pkg();
 
         let pkg = match matches.len() {
             0 => exit(0),
@@ -116,7 +153,7 @@ fn main() {
         ) {
             Ok(pkgs) => pkgs,
             Err(e) => {
-                eprintln!("Error resolving dependencies: {:?}", e);
+                eprintln!("Error resolving dependencies: {}", e);
                 exit(1);
             }
         };
@@ -143,7 +180,7 @@ fn main() {
         }
     }
 }
-
+/*
 fn search_pkg(
     repos: &Vec<Box<dyn Repository>>,
     query: (&str, &Option<(CompOp, &str)>),
@@ -172,3 +209,4 @@ fn search_pkg(
         Some(matches)
     }
 }
+*/
